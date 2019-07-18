@@ -12,6 +12,7 @@ import kr.jclab.javautils.asymsecurefile.*;
 import kr.jclab.javautils.asymsecurefile.internal.AlgorithmInfo;
 import kr.jclab.javautils.asymsecurefile.internal.OutputStreamDelegate;
 import kr.jclab.javautils.asymsecurefile.internal.SignatureHeader;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import javax.crypto.*;
 import javax.crypto.spec.GCMParameterSpec;
@@ -37,6 +38,7 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
     }
 
     private final Random random = new SecureRandom();
+    private final BouncyCastleProvider workSecurityProvider = new BouncyCastleProvider();
 
     private AlgorithmInfo algorithmInfo = null;
     private transient Key asymKey = null;
@@ -144,11 +146,11 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
             byte[] dataIV = new byte[16];
             this.random.nextBytes(dataIV);
 
-            this.fingerprintDigest = MessageDigest.getInstance("SHA-256", this.securityProvider);
+            this.fingerprintDigest = MessageDigest.getInstance("SHA-256", this.workSecurityProvider);
             this.dataCipher = createDataCipher(dataIV, this.dataKey);
 
             if(!this.dataAlgorithm.isContainMac()) {
-                this.dataMac = Mac.getInstance("HmacSHA256", this.securityProvider);
+                this.dataMac = Mac.getInstance("HmacSHA256", this.workSecurityProvider);
             }
 
             dataIV = this.dataCipher.getIV();
@@ -172,8 +174,7 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
             this.random.nextBytes(dataIV);
             try {
                 Cipher cipher = createDataCipher(dataIV, this.authEncKey);
-                cipher.update(chunk.getData(), 0, chunk.getDataSize());
-                byte[] ciphertext = cipher.doFinal();
+                byte[] ciphertext = cipher.doFinal(chunk.getData(), 0, chunk.getDataSize());
                 byte[] buffer = new byte[16 + ciphertext.length];
                 System.arraycopy(dataIV, 0, buffer, 0, dataIV.length);
                 System.arraycopy(ciphertext, 0, buffer, dataIV.length, ciphertext.length);
@@ -299,7 +300,7 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
             return signature.sign();
         }else if(this.localKeyPair != null) {
             // Public Encrypt (EC)
-            Signature signature = Signature.getInstance(this.algorithmInfo.getAlgorithm().getSignatureAlgorithm(), this.securityProvider);
+            Signature signature = Signature.getInstance(this.algorithmInfo.getAlgorithm().getSignatureAlgorithm(), this.workSecurityProvider);
             signature.initSign(this.localKeyPair.getPrivate());
             signature.update(data);
             return signature.sign();
@@ -315,9 +316,9 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
     private Cipher createDataCipher(byte[] dataIv, byte[] key) throws NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException {
         Cipher cipher;
         try {
-            cipher = Cipher.getInstance(this.dataAlgorithm.getIdentifier().getId(), this.securityProvider);
+            cipher = Cipher.getInstance(this.dataAlgorithm.getIdentifier().getId(), this.workSecurityProvider);
         }catch (NoSuchAlgorithmException algoException) {
-            cipher = Cipher.getInstance(this.dataAlgorithm.getAlgorithm(), this.securityProvider);
+            cipher = Cipher.getInstance(this.dataAlgorithm.getAlgorithm(), this.workSecurityProvider);
         }
         if(this.dataAlgorithm.isContainMac()) {
             GCMParameterSpec gcmParameterSpec = new GCMParameterSpec(128, dataIv);
