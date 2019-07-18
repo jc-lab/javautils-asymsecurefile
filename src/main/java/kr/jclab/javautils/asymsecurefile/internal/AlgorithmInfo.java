@@ -43,7 +43,7 @@ public class AlgorithmInfo {
             }
         }
 
-        if(algorithm != null) {
+        if(algorithm == null) {
             for (AsymAlgorithm item : AsymAlgorithm.values()) {
                 if (keySpecOid.equals(item.getIdentifier()) || keySpecOid.on(item.getIdentifier())) {
                     algorithm = item;
