@@ -70,5 +70,5 @@ public abstract class OutputStreamDelegate {
 
     public abstract void write(byte[] buffer, int off, int size) throws IOException;
     public abstract void finish() throws IOException;
-    public abstract void setUserChunk(short code, UserChunk chunk);
+    public abstract void setUserChunk(UserChunk chunk) throws IOException;
 }

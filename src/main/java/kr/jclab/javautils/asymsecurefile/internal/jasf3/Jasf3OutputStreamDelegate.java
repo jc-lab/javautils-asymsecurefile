@@ -29,18 +29,11 @@ import java.util.Random;
 
 public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
     private enum State {
-        INIT(0),
-        WRITE_HEADER(1),
-        WRITE_DATA(2),
-        WRITE_FOOTER(3);
-
-        private final int value;
-        State(int value) {
-            this.value = value;
-        }
-        public int value() {
-            return value;
-        }
+        INIT,
+        INITED,
+        WRITE_HEADER,
+        WRITE_DATA,
+        WRITE_FOOTER;
     }
 
     private final Random random = new SecureRandom();
@@ -60,7 +53,8 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
      */
     private final Map<Integer, Chunk> rawChunkMap = new HashMap<>();
 
-    private byte[] authKey = null;
+    private transient byte[] authKey = null;
+    private transient byte[] authEncKey = null;
     private byte[] authTag = null;
 
     private transient byte[] dataKey = null;
@@ -95,6 +89,8 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
             Mac dataKeyMac = Mac.getInstance("HmacSHA256");
             byte[] seedKey;
             dataKeyMac.init(new SecretKeySpec(this.authKey, dataKeyMac.getAlgorithm()));
+
+            this.authEncKey = MessageDigest.getInstance("SHA-256").digest(this.authKey);
 
             if (this.asymKey instanceof ECKey) {
                 byte[] encodedLocalKey;
@@ -149,18 +145,9 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
             this.random.nextBytes(dataIV);
 
             this.fingerprintDigest = MessageDigest.getInstance("SHA-256", this.securityProvider);
-            try {
-                this.dataCipher = Cipher.getInstance(this.dataAlgorithm.getIdentifier().getId(), this.securityProvider);
-            }catch (NoSuchAlgorithmException algoException) {
-                this.dataCipher = Cipher.getInstance(this.dataAlgorithm.getAlgorithm(), this.securityProvider);
-            }
+            this.dataCipher = createDataCipher(dataIV, this.dataKey);
 
-            if(this.dataAlgorithm.isContainMac()) {
-                GCMParameterSpec gcmParameterSpec = new GCMParameterSpec(128, dataIV);
-                this.dataCipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(this.dataKey, this.dataAlgorithm.getAlgorithm().split("/", 2)[0]), gcmParameterSpec);
-                this.dataCipher.updateAAD(this.authKey);
-            }else{
-                this.dataCipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(this.dataKey, this.dataAlgorithm.getAlgorithm().split("/", 2)[0]), new IvParameterSpec(dataIV));
+            if(!this.dataAlgorithm.isContainMac()) {
                 this.dataMac = Mac.getInstance("HmacSHA256", this.securityProvider);
             }
 
@@ -172,20 +159,39 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
             throw new IOException(e);
         }
 
-        this.state = State.WRITE_HEADER;
+        this.state = State.INITED;
     }
 
     @Override
-    public void setUserChunk(short code, UserChunk chunk) {
-        if(this.state == State.WRITE_HEADER) {
+    public void setUserChunk(UserChunk chunk) throws IOException {
+        if(this.state != State.INITED) {
             throw new IllegalStateException();
         }
-        this.rawChunkMap.put(0x800000 | (code & 0xFFFF), chunk);
+        if(chunk.getFlag() == Chunk.Flag.EncryptedWithAuthEncKey) {
+            byte[] dataIV = new byte[16];
+            this.random.nextBytes(dataIV);
+            try {
+                Cipher cipher = createDataCipher(dataIV, this.authEncKey);
+                cipher.update(chunk.getData(), 0, chunk.getDataSize());
+                byte[] ciphertext = cipher.doFinal();
+                byte[] buffer = new byte[16 + ciphertext.length];
+                System.arraycopy(dataIV, 0, buffer, 0, dataIV.length);
+                System.arraycopy(ciphertext, 0, buffer, dataIV.length, ciphertext.length);
+                this.rawChunkMap.put(0x800000 | chunk.getUserCode(), new RawChunk((byte)(0x80 | chunk.getFlag().value()), chunk.getUserCode(),  (short)buffer.length, buffer));
+            } catch (NoSuchPaddingException | NoSuchAlgorithmException | InvalidAlgorithmParameterException | InvalidKeyException | IllegalBlockSizeException | BadPaddingException e) {
+                throw new IOException(e);
+            }
+        }else{
+            this.rawChunkMap.put(chunk.getChunkId(), chunk);
+        }
     }
 
     @Override
     public void write(byte[] buffer, int off, int size) throws IOException {
-        if(this.state == State.WRITE_HEADER) {
+        if(this.state == State.INITED) {
+            this.state = State.WRITE_HEADER;
+            writeHeader();
+        }else if(this.state == State.WRITE_HEADER) {
             writeHeader();
         }
         int bufferPosition = 0;
@@ -304,5 +310,22 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
             return cipher.doFinal(data);
         }
         throw new RuntimeException("Unknown Error");
+    }
+
+    private Cipher createDataCipher(byte[] dataIv, byte[] key) throws NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException {
+        Cipher cipher;
+        try {
+            cipher = Cipher.getInstance(this.dataAlgorithm.getIdentifier().getId(), this.securityProvider);
+        }catch (NoSuchAlgorithmException algoException) {
+            cipher = Cipher.getInstance(this.dataAlgorithm.getAlgorithm(), this.securityProvider);
+        }
+        if(this.dataAlgorithm.isContainMac()) {
+            GCMParameterSpec gcmParameterSpec = new GCMParameterSpec(128, dataIv);
+            cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, this.dataAlgorithm.getAlgorithm().split("/", 2)[0]), gcmParameterSpec);
+            cipher.updateAAD(this.authKey);
+        }else{
+            cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, this.dataAlgorithm.getAlgorithm().split("/", 2)[0]), new IvParameterSpec(dataIv));
+        }
+        return cipher;
     }
 }

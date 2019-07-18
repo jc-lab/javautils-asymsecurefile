@@ -15,6 +15,7 @@ import java.io.InputStream;
 import java.security.Key;
 import java.security.KeyPair;
 import java.security.Provider;
+import java.util.Enumeration;
 
 public abstract class InputStreamDelegate {
     protected final InputStream inputStream;
@@ -34,7 +35,8 @@ public abstract class InputStreamDelegate {
     public abstract int headerRead() throws IOException;
     public abstract int available() throws IOException;
     public abstract int read(byte[] buffer, int offset, int size) throws IOException;
-    public abstract UserChunk getUserChunk(short code);
+    public abstract Enumeration<UserChunk> userChunks() throws IOException;
+    public abstract UserChunk getUserChunk(short code) throws IOException;
     public abstract boolean isDataReadable();
 
     public abstract void validate() throws IOException;

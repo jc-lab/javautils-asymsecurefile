@@ -152,6 +152,10 @@ public class AsymSecureFileOutputStream extends OutputStream {
         outputStream.close();
     }
 
+    public void setUserChunk(UserChunk userChunk) throws IOException {
+        this.delegate.setUserChunk(userChunk);
+    }
+
     @SuppressWarnings("unused")
     private void checkAndInit(boolean force) throws IOException {
         if(this.inited)

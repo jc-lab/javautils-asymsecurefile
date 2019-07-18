@@ -20,6 +20,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.security.Key;
 import java.security.KeyPair;
 import java.security.Provider;
+import java.util.Enumeration;
 
 public class AsymSecureFileInputStream extends InputStream {
     private final InputStream inputStream;
@@ -142,5 +143,13 @@ public class AsymSecureFileInputStream extends InputStream {
     @Override
     public void close() throws IOException {
         this.inputStream.close();
+    }
+
+    public UserChunk getUserChunk(short code) throws IOException {
+        return this.delegate.getUserChunk(code);
+    }
+
+    public Enumeration<UserChunk> userChunks() throws IOException {
+        return this.delegate.userChunks();
     }
 }

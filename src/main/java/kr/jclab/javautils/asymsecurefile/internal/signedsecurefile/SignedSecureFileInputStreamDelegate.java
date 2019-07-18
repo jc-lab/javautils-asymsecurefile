@@ -17,6 +17,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.security.*;
+import java.util.Enumeration;
 
 public class SignedSecureFileInputStreamDelegate extends InputStreamDelegate {
     private transient Key asymmetricKey = null;
@@ -72,6 +73,11 @@ public class SignedSecureFileInputStreamDelegate extends InputStreamDelegate {
             start();
         }
         return 0;
+    }
+
+    @Override
+    public Enumeration<UserChunk> userChunks() throws IOException {
+        return null;
     }
 
     @Override

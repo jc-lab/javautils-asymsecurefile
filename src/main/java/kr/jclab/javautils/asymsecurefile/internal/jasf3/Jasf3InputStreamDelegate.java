@@ -26,10 +26,7 @@ import java.security.*;
 import java.security.interfaces.*;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
-import java.util.Arrays;
-import java.util.Deque;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
 public class Jasf3InputStreamDelegate extends InputStreamDelegate {
@@ -54,8 +51,12 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
      */
     private final Map<Integer, Chunk> rawChunkMap = new HashMap<>();
 
-    private byte[] authKey = null;
+    private Map<Short, UserChunk> cachedUserChunkMap = null;
+
+    private transient byte[] authKey = null;
     private byte[] authTag = null;
+
+    private transient byte[] authEncKey = null;
 
     private AlgorithmInfo algorithmInfo = null;
 
@@ -83,6 +84,11 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
     @Override
     public void setAuthKey(byte[] authKey) {
         this.authKey = authKey;
+        try {
+            this.authEncKey = MessageDigest.getInstance("SHA-256").digest(this.authKey);
+        } catch (NoSuchAlgorithmException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -202,9 +208,61 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
         return readSize;
     }
 
+    private void parseUserChunks() throws IOException {
+        if(this.cachedUserChunkMap != null)
+            return ;
+
+        final Map<Short, UserChunk> userChunkMap = new HashMap<>();
+        DataAlgorithmChunk dataAlgorithmChunk = getSpecialChunk(DataAlgorithmChunk.class, true);
+
+        for(Map.Entry<Integer, Chunk> entry : rawChunkMap.entrySet()) {
+            if((entry.getKey() & 0x800000) != 0) {
+                RawUserChunk rawUserChunk = (RawUserChunk)entry.getValue();
+                if(rawUserChunk.getFlag() == Chunk.Flag.EncryptedWithAuthEncKey) {
+                    byte[] dataIV = Arrays.copyOf(rawUserChunk.getData(), 16);
+                    Cipher cipher = null;
+                    byte[] plaintext;
+                    try {
+                        cipher = createDataCipher(dataAlgorithmChunk, dataIV, this.authEncKey);
+                        byte[] temp = cipher.update(rawUserChunk.getData(), 16, rawUserChunk.getDataSize() - 16);
+                        byte[] last = cipher.doFinal();
+                        int pos = 0;
+                        plaintext = new byte[(temp != null ? temp.length : 0) + (last != null ? last.length : 0)];
+                        if(temp != null) {
+                            System.arraycopy(temp, 0, plaintext, pos, temp.length);
+                            pos += temp.length;
+                        }
+                        if(last != null) {
+                            System.arraycopy(last, 0, plaintext, pos, last.length);
+                            pos += last.length;
+                        }
+                    } catch (NoSuchPaddingException | NoSuchAlgorithmException | InvalidAlgorithmParameterException | InvalidKeyException | IllegalBlockSizeException | BadPaddingException e) {
+                        throw new IOException(e);
+                    }
+                    userChunkMap.put((short) (entry.getKey() & 0xFFFF), new RawUserChunk(rawUserChunk.getPrimaryType(), rawUserChunk.getUserCode(), (short)plaintext.length, plaintext));
+                }else{
+                    userChunkMap.put((short) (entry.getKey() & 0xFFFF), new RawUserChunk(rawUserChunk));
+                }
+            }
+        }
+
+        this.cachedUserChunkMap = userChunkMap;
+    }
+
     @Override
-    public UserChunk getUserChunk(short code) {
-        return (UserChunk)rawChunkMap.get(code & 0xFFFF | 0x800000);
+    public Enumeration<UserChunk> userChunks() throws IOException {
+        parseUserChunks();
+        List<UserChunk> items = new ArrayList<>(rawChunkMap.size());
+        for(Map.Entry<Short, UserChunk> entry : cachedUserChunkMap.entrySet()) {
+            items.add(entry.getValue());
+        }
+        return Collections.enumeration(items);
+    }
+
+    @Override
+    public UserChunk getUserChunk(short code) throws IOException {
+        parseUserChunks();
+        return cachedUserChunkMap.get(code);
     }
 
     private Chunk getChunk(Jasf3ChunkType type) {
@@ -239,8 +297,8 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
 
         DefaultHeaderChunk defaultHeader = getSpecialChunk(DefaultHeaderChunk.class, true);
         AsymAlgorithmChunk asymAlgorithmChunk = getSpecialChunk(AsymAlgorithmChunk.class, true);
-        EncryptedSeedKeyChunk encryptedSeedKeyChunk = getSpecialChunk(EncryptedSeedKeyChunk.class, true);
         DataAlgorithmChunk dataAlgorithmChunk = getSpecialChunk(DataAlgorithmChunk.class, true);
+        EncryptedSeedKeyChunk encryptedSeedKeyChunk = getSpecialChunk(EncryptedSeedKeyChunk.class, true);
         DataIvChunk dataIVChunk = getSpecialChunk(DataIvChunk.class, true);
 
         this.algorithmInfo = asymAlgorithmChunk.algorithmInfo();
@@ -319,13 +377,11 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
                 this.dataCipher = Cipher.getInstance(dataAlgorithmChunk.dataAlgorithm().getAlgorithm(), this.securityProvider);
             }
 
+            this.dataCipher = createDataCipher(dataAlgorithmChunk, dataIVChunk.getIv(), dataKey);
+
             if(dataAlgorithmChunk.dataAlgorithm().isContainMac()) {
-                GCMParameterSpec gcmParameterSpec = new GCMParameterSpec(128, dataIVChunk.getIv());
-                this.dataCipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(dataKey, dataAlgorithmChunk.dataAlgorithm().getAlgorithm().split("/", 2)[0]), gcmParameterSpec);
-                this.dataCipher.updateAAD(this.authKey);
                 this.authTag = new byte[this.dataCipher.getBlockSize()];
             }else{
-                this.dataCipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(dataKey, dataAlgorithmChunk.dataAlgorithm().getAlgorithm().split("/", 2)[0]), new IvParameterSpec(dataIVChunk.getIv()));
                 this.dataMac = Mac.getInstance("HmacSHA256", this.securityProvider);
             }
         } catch (Exception e) {
@@ -391,6 +447,24 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
         }else{
             throw new RuntimeException("Unknown Error");
         }
+    }
+
+    private Cipher createDataCipher(DataAlgorithmChunk dataAlgorithmChunk, byte[] dataIV, byte[] key) throws IOException, NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException {
+        Cipher cipher;
+        try {
+            cipher = Cipher.getInstance(dataAlgorithmChunk.dataAlgorithm().getIdentifier().getId(), this.securityProvider);
+        }catch (NoSuchAlgorithmException algoException) {
+            cipher = Cipher.getInstance(dataAlgorithmChunk.dataAlgorithm().getAlgorithm(), this.securityProvider);
+        }
+
+        if(dataAlgorithmChunk.dataAlgorithm().isContainMac()) {
+            GCMParameterSpec gcmParameterSpec = new GCMParameterSpec(128, dataIV);
+            cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, dataAlgorithmChunk.dataAlgorithm().getAlgorithm().split("/", 2)[0]), gcmParameterSpec);
+            cipher.updateAAD(this.authKey);
+        }else{
+            cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, dataAlgorithmChunk.dataAlgorithm().getAlgorithm().split("/", 2)[0]), new IvParameterSpec(dataIV));
+        }
+        return cipher;
     }
 
     private final class ReadingChunk {

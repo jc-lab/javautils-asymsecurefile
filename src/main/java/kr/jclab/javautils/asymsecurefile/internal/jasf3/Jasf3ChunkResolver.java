@@ -1,7 +1,6 @@
 package kr.jclab.javautils.asymsecurefile.internal.jasf3;
 
 import kr.jclab.javautils.asymsecurefile.Chunk;
-import kr.jclab.javautils.asymsecurefile.UserChunk;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
@@ -20,7 +19,7 @@ public class Jasf3ChunkResolver {
 
     public static Chunk parseChunk(byte primaryType, short userCode, short dataSize, byte[] data) {
         if((primaryType & 0x80) != 0) {
-            return new UserChunk(primaryType, userCode, dataSize, data);
+            return new RawUserChunk(primaryType, userCode, dataSize, data);
         }else {
             Class<? extends Chunk> chunkClazz = chunkClasses.get(primaryType);
             if(chunkClazz == null)
