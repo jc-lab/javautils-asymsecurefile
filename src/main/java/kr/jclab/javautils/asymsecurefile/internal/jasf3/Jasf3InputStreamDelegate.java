@@ -568,13 +568,11 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
         public DataChunkQueueItem(byte[] buffer, int size) {
             this.size = size;
             this.buffer = buffer;
-            System.out.println("DataChunkQueueItem :: " + this.size);
         }
 
         public DataChunkQueueItem(byte[] buffer) {
             this.size = buffer.length;
             this.buffer = buffer;
-            System.out.println("DataChunkQueueItem :: " + this.size);
         }
 
         public byte[] getBuffer() {
