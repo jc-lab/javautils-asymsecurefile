@@ -228,14 +228,16 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
                         byte[] last = cipher.doFinal();
                         int pos = 0;
                         plaintext = new byte[(temp != null ? temp.length : 0) + (last != null ? last.length : 0)];
-                        if(temp != null) {
+                        if (temp != null) {
                             System.arraycopy(temp, 0, plaintext, pos, temp.length);
                             pos += temp.length;
                         }
-                        if(last != null) {
+                        if (last != null) {
                             System.arraycopy(last, 0, plaintext, pos, last.length);
                             pos += last.length;
                         }
+                    } catch (AEADBadTagException e) {
+                        throw new ValidateFailedException("UserChunk integrity validation failed");
                     } catch (NoSuchPaddingException | NoSuchAlgorithmException | InvalidAlgorithmParameterException | InvalidKeyException | IllegalBlockSizeException | BadPaddingException e) {
                         throw new IOException(e);
                     }
