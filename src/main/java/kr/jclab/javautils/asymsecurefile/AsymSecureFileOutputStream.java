@@ -28,6 +28,7 @@ public class AsymSecureFileOutputStream extends OutputStream {
     private boolean finished = false;
 
     private transient Key asymKey = null;
+    private AsymAlgorithm asymAlgorithm = null;
     private byte[] authKey = null;
     private DataAlgorithm dataAlgorithm = DataAlgorithm.AES256_GCM;
 
@@ -49,7 +50,7 @@ public class AsymSecureFileOutputStream extends OutputStream {
     }
 
     /**
-     * Set asymmetric key
+     * Set asymmetric key with auto algorithm detection
      *
      * @param keyPair keyPair
      */
@@ -59,17 +60,48 @@ public class AsymSecureFileOutputStream extends OutputStream {
         }else if(this.delegate.getOperationType() == OperationType.PUBLIC_ENCRYPT) {
             this.asymKey = keyPair.getPublic();
         }
+        this.asymAlgorithm = null;
         checkAndInit(false);
     }
 
     /**
-     * Set asymmetric key
+     * Set asymmetric key without auto algorithm detection
+     *
+     * @param keyPair keyPair
+     * @param asymAlgorithm asymAlgorithm
+     * @throws IOException
+     */
+    public void setAsymKey(@NotNull KeyPair keyPair, AsymAlgorithm asymAlgorithm) throws IOException {
+        if(this.delegate.getOperationType() == OperationType.SIGN) {
+            this.asymKey = keyPair.getPrivate();
+        }else if(this.delegate.getOperationType() == OperationType.PUBLIC_ENCRYPT) {
+            this.asymKey = keyPair.getPublic();
+        }
+        this.asymAlgorithm = asymAlgorithm;
+        checkAndInit(false);
+    }
+
+    /**
+     * Set asymmetric key with auto algorithm detection
      *
      * @param key key
      */
     @SuppressWarnings("unused")
     public void setAsymKey(@NotNull Key key) throws IOException {
         this.asymKey = key;
+        this.asymAlgorithm = null;
+        checkAndInit(false);
+    }
+
+    /**
+     * Set asymmetric key without auto algorithm detection
+     *
+     * @param key key
+     */
+    @SuppressWarnings("unused")
+    public void setAsymKey(@NotNull Key key, AsymAlgorithm asymAlgorithm) throws IOException {
+        this.asymKey = key;
+        this.asymAlgorithm = asymAlgorithm;
         checkAndInit(false);
     }
 
@@ -125,7 +157,7 @@ public class AsymSecureFileOutputStream extends OutputStream {
         if(this.inited)
             return ;
         if(this.asymKey != null && this.dataAlgorithm != null && this.authKey != null) {
-            this.delegate.init(this.asymKey, this.dataAlgorithm, this.authKey);
+            this.delegate.init(this.asymKey, this.asymAlgorithm, this.dataAlgorithm, this.authKey);
             this.asymKey = null;
             this.authKey = null;
             this.inited = true;

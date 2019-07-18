@@ -66,7 +66,7 @@ public abstract class OutputStreamDelegate {
         return this.operationType;
     }
 
-    public abstract void init(Key key, DataAlgorithm dataAlgorithm, byte[] authKey) throws IOException;
+    public abstract void init(Key key, AsymAlgorithm asymAlgorithm, DataAlgorithm dataAlgorithm, byte[] authKey) throws IOException;
 
     public abstract void write(byte[] buffer, int off, int size) throws IOException;
     public abstract void finish() throws IOException;

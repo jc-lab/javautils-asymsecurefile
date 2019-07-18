@@ -12,7 +12,6 @@ import kr.jclab.javautils.asymsecurefile.*;
 import kr.jclab.javautils.asymsecurefile.internal.AlgorithmInfo;
 import kr.jclab.javautils.asymsecurefile.internal.OutputStreamDelegate;
 import kr.jclab.javautils.asymsecurefile.internal.SignatureHeader;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import javax.crypto.*;
 import javax.crypto.spec.GCMParameterSpec;
@@ -76,11 +75,11 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
     }
 
     @Override
-    public void init(Key key, DataAlgorithm dataAlgorithm, byte[] authKey) throws IOException {
+    public void init(Key key, AsymAlgorithm asymAlgorithm, DataAlgorithm dataAlgorithm, byte[] authKey) throws IOException {
         if(state != State.INIT)
             return ;
 
-        this.algorithmInfo = new AlgorithmInfo(key);
+        this.algorithmInfo = new AlgorithmInfo(key, asymAlgorithm);
         if(this.algorithmInfo.getAlgorithm() == null) {
             throw new NotSupportAlgorithmException();
         }

@@ -9,9 +9,11 @@
 package kr.jclab.javautils.asymsecurefile.internal;
 
 import kr.jclab.javautils.asymsecurefile.AsymAlgorithm;
+import kr.jclab.javautils.asymsecurefile.NotSupportAlgorithmException;
 import org.bouncycastle.asn1.*;
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
+import org.bouncycastle.asn1.x9.X9ObjectIdentifiers;
 
 import java.security.Key;
 import java.security.interfaces.ECKey;
@@ -22,8 +24,7 @@ public class AlgorithmInfo {
     private final ASN1ObjectIdentifier oid;
     private final int keySize;
 
-    public AlgorithmInfo(Key key) {
-        AsymAlgorithm algorithm = null;
+    public AlgorithmInfo(Key key, AsymAlgorithm algorithm) throws NotSupportAlgorithmException {
         byte[] encoded = key.getEncoded();
         ASN1ObjectIdentifier keySpecOid = null;
         int keySize = 0;
@@ -41,10 +42,24 @@ public class AlgorithmInfo {
                 keySpecOid = publicKeyInfo.getAlgorithm().getAlgorithm();
             }
         }
-        for(AsymAlgorithm item : AsymAlgorithm.values()) {
-            if(keySpecOid.equals(item.getIdentifier()) || keySpecOid.on(item.getIdentifier())) {
-                algorithm = item;
-                break;
+
+        if(algorithm != null) {
+            for (AsymAlgorithm item : AsymAlgorithm.values()) {
+                if (keySpecOid.equals(item.getIdentifier()) || keySpecOid.on(item.getIdentifier())) {
+                    algorithm = item;
+                    break;
+                }
+            }
+
+            /* Exceptional cases */
+            if (algorithm == null) {
+                if (keySpecOid.equals(X9ObjectIdentifiers.id_ecPublicKey)) {
+                    algorithm = AsymAlgorithm.EC;
+                }
+            }
+
+            if (algorithm == null) {
+                throw new NotSupportAlgorithmException("format=" + key.getFormat() + ", keySpecOid" + keySpecOid.getId());
             }
         }
 
