@@ -12,39 +12,47 @@ import kr.jclab.javautils.asymsecurefile.Chunk;
 import kr.jclab.javautils.asymsecurefile.InvalidFileException;
 import kr.jclab.javautils.asymsecurefile.OperationType;
 
-public class DefaultHeaderChunk {
-    private OperationType operationType = null;
+public class DefaultHeaderChunk extends Chunk {
+    public static final Jasf3ChunkType CHUNK_TYPE = Jasf3ChunkType.DEFAULT_HEADER;
+    private final OperationType operationType;
 
-    public DefaultHeaderChunk() {
+    public DefaultHeaderChunk(OperationType operationType, byte[] data) {
+        super(CHUNK_TYPE.value(), (short)0, (short)data.length, data);
+        this.operationType = operationType;
     }
 
-    public DefaultHeaderChunk(Chunk chunk) throws InvalidFileException {
-        if(chunk == null)
-            throw new InvalidFileException("Not exists DefaultHeader");
-        if(chunk.getDataSize() < 1) {
-            throw new InvalidFileException("Invalid DefaultHeader");
-        }
+    public DefaultHeaderChunk(Short dataSize, byte[] data) throws InvalidFileException {
+        super(CHUNK_TYPE.value(), (short)0, dataSize, data);
+        OperationType operationType = null;
         for(OperationType item : OperationType.values()) {
-            if(item.value() == chunk.getData()[0]) {
-                this.operationType = item;
+            if(item.value() == data[0]) {
+                operationType = item;
             }
         }
-        if(this.operationType == null) {
+        this.operationType = operationType;
+        if(operationType == null) {
             throw new InvalidFileException("Invalid DefaultHeader");
         }
-    }
-
-    public Chunk build() {
-        byte[] data = new byte[1];
-        data[0] = this.operationType.value();
-        return new Chunk(Jasf3ChunkType.DEFAULT_HEADER.value(), data);
     }
 
     public OperationType operationType() {
         return operationType;
     }
-    public DefaultHeaderChunk operationType(OperationType operationType) {
-        this.operationType = operationType;
-        return this;
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static final class Builder {
+        private OperationType operationType;
+
+        public Builder withOperationType(OperationType operationType) {
+            this.operationType = operationType;
+            return this;
+        }
+
+        public DefaultHeaderChunk build() {
+            return new DefaultHeaderChunk(this.operationType, new byte[] {this.operationType.value()});
+        }
     }
 }

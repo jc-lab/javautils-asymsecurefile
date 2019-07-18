@@ -17,32 +17,46 @@ import org.bouncycastle.asn1.ASN1Primitive;
 import java.io.IOException;
 import java.util.Arrays;
 
-public class DataAlgorithmChunk {
-    private DataAlgorithm dataAlgorithm = null;
+public class DataAlgorithmChunk extends Chunk {
+    public static final Jasf3ChunkType CHUNK_TYPE = Jasf3ChunkType.DATA_ALGORITHM;
+    private final DataAlgorithm dataAlgorithm;
 
-    public DataAlgorithmChunk() {
+    /**
+     * Generated chunk data
+     *
+     * @param dataAlgorithm
+     * @param data
+     */
+    private DataAlgorithmChunk(DataAlgorithm dataAlgorithm, byte[] data) {
+        super(CHUNK_TYPE.value(), (short)0, (short)data.length, data);
+        this.dataAlgorithm = dataAlgorithm;
     }
 
-    public DataAlgorithmChunk(Chunk chunk) throws InvalidFileException {
-        byte[] data;
+    /**
+     * Parse chunk data
+     *
+     * @param dataSize
+     * @param data
+     * @throws InvalidFileException
+     */
+    public DataAlgorithmChunk(Short dataSize, byte[] data) throws InvalidFileException {
+        super(CHUNK_TYPE.value(), (short)0, dataSize, data);
 
-        if(chunk == null)
-            throw new InvalidFileException("Not exists AsymAlgorithm");
+        DataAlgorithm dataAlgorithm = null;
 
-        data = chunk.getData();
-        if(data.length != chunk.getDataSize()) {
-            data = Arrays.copyOf(data, chunk.getDataSize());
-        }
+        byte[] buffer = data;
+        if(buffer.length != dataSize)
+            buffer = Arrays.copyOf(data, dataSize);
 
         try {
-            ASN1Primitive primitive = ASN1ObjectIdentifier.fromByteArray(data);
+            ASN1Primitive primitive = ASN1ObjectIdentifier.fromByteArray(buffer);
             ASN1ObjectIdentifier asymAlgoOid = (primitive instanceof ASN1ObjectIdentifier) ? ((ASN1ObjectIdentifier)primitive) : null;
             if(asymAlgoOid == null) {
                 throw new IOException("ERROR");
             }
-            for(DataAlgorithm dataAlgorithm : DataAlgorithm.values()) {
-                if(dataAlgorithm.getIdentifier().equals(asymAlgoOid)) {
-                    this.dataAlgorithm = dataAlgorithm;
+            for(DataAlgorithm item : DataAlgorithm.values()) {
+                if(item.getIdentifier().equals(asymAlgoOid)) {
+                    dataAlgorithm = item;
                     break;
                 }
             }
@@ -50,20 +64,31 @@ public class DataAlgorithmChunk {
             e.printStackTrace();
         }
 
-        if(this.dataAlgorithm == null) {
+        this.dataAlgorithm = dataAlgorithm;
+
+        if(dataAlgorithm == null) {
             throw new InvalidFileException("Unknown DataAlgorithm");
         }
-    }
-
-    public Chunk build() throws IOException {
-        return new Chunk(Jasf3ChunkType.DATA_ALGORITHM.value(), dataAlgorithm.getIdentifier().getEncoded());
     }
 
     public DataAlgorithm dataAlgorithm() {
         return this.dataAlgorithm;
     }
-    public DataAlgorithmChunk dataAlgorithm(DataAlgorithm dataAlgorithm) {
-        this.dataAlgorithm = dataAlgorithm;
-        return this;
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    public static final class Builder {
+        private DataAlgorithm dataAlgorithm;
+
+        public Builder withDataAlgorithm(DataAlgorithm dataAlgorithm) {
+            this.dataAlgorithm = dataAlgorithm;
+            return this;
+        }
+
+        public DataAlgorithmChunk build() throws IOException {
+            return new DataAlgorithmChunk(this.dataAlgorithm, dataAlgorithm.getIdentifier().getEncoded());
+        }
     }
 }

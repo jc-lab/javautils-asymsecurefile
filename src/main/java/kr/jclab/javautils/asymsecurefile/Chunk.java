@@ -8,7 +8,7 @@
 
 package kr.jclab.javautils.asymsecurefile;
 
-public class Chunk {
+public abstract class Chunk {
     public enum Flag {
         EncryptedWithCustomKey((byte)0x01),
         SignedSignature((byte)0x02),
@@ -28,30 +28,11 @@ public class Chunk {
     protected final short dataSize;
     protected final byte[] data;
 
-    public Chunk(byte primaryType, short userCode, short dataSize, byte[] data) {
+    protected Chunk(byte primaryType, short userCode, short dataSize, byte[] data) {
         this.primaryType = primaryType;
         this.userCode = userCode;
         this.dataSize = dataSize;
         this.data = data;
-    }
-
-    public Chunk(byte primaryType, byte[] data) {
-        this.primaryType = primaryType;
-        this.userCode = 0;
-        this.dataSize = (short)data.length;
-        this.data = data;
-    }
-
-    public Flag getFlag() {
-        if((this.primaryType & 0x80) != 0) {
-            byte value = (byte)(this.primaryType & 0x7F);
-            for(Flag flag : Flag.values()) {
-                if(flag.value() == value) {
-                    return flag;
-                }
-            }
-        }
-        return null;
     }
 
     public int getChunkId() {

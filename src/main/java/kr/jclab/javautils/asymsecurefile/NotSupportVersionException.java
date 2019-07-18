@@ -10,20 +10,20 @@ package kr.jclab.javautils.asymsecurefile;
 
 import java.io.IOException;
 
-public class NotSupportVersion extends IOException {
-    public NotSupportVersion() {
+public class NotSupportVersionException extends IOException {
+    public NotSupportVersionException() {
         super();
     }
 
-    public NotSupportVersion(String message) {
+    public NotSupportVersionException(String message) {
         super(message);
     }
 
-    public NotSupportVersion(String message, Throwable cause) {
+    public NotSupportVersionException(String message, Throwable cause) {
         super(message, cause);
     }
 
-    public NotSupportVersion(Throwable cause) {
+    public NotSupportVersionException(Throwable cause) {
         super(cause);
     }
 }

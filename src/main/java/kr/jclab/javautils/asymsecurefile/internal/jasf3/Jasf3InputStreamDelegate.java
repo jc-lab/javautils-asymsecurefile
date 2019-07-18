@@ -21,6 +21,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.security.*;
 import java.security.interfaces.*;
 import java.security.spec.PKCS8EncodedKeySpec;
@@ -112,13 +113,11 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
                 switch(this.state) {
                     case READ_HEADER:
                         if (this.readingChunk.primaryType != Jasf3ChunkType.DATA_STREAM.value()) {
-                            if ((this.readingChunk.primaryType & 0x80) != 0) {
-                                // User chunk
-                                rawChunkMap.put(0x800000 | (this.readingChunk.userCode & 0xFFFF), new UserChunk(this.readingChunk.primaryType, this.readingChunk.userCode, this.readingChunk.size, this.readingChunk.getData()));
-                            }else{
-                                // Jasf3 chunk
-                                rawChunkMap.put(this.readingChunk.primaryType & 0xFF, new Chunk(this.readingChunk.primaryType, (short) 0, this.readingChunk.size, this.readingChunk.getData()));
+                            int code = this.readingChunk.primaryType & 0xFF;
+                            if((code & 0x80) != 0) {
+                                code = 0x800000 | this.readingChunk.userCode;
                             }
+                            rawChunkMap.put(code, Jasf3ChunkResolver.parseChunk(this.readingChunk.primaryType, (short) 0, this.readingChunk.size, this.readingChunk.getData()));
                             break;
                         }
                         this.state = State.READ_DATA;
@@ -137,7 +136,7 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
                             break;
                         }
                     case READ_FOOTER:
-                        rawChunkMap.put(this.readingChunk.primaryType & 0xFF, new Chunk(this.readingChunk.primaryType, (short) 0, this.readingChunk.size, this.readingChunk.getData()));
+                        rawChunkMap.put(this.readingChunk.primaryType & 0xff, Jasf3ChunkResolver.parseChunk(this.readingChunk.primaryType, (short) 0, this.readingChunk.size, this.readingChunk.getData()));
                         this.state = State.READ_DONE;
                         validateFooter();
                         break;
@@ -217,6 +216,20 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
         validateFooter();
     }
 
+    private <T extends Chunk> T getSpecialChunk(Class<T> clazz, boolean required) throws IOException {
+        Jasf3ChunkType chunkType;
+        try {
+            Field chunkTypeField = clazz.getField("CHUNK_TYPE");
+            chunkType = (Jasf3ChunkType)chunkTypeField.get(null);
+        } catch (NoSuchFieldException | IllegalAccessException e) {
+            throw new RuntimeException(e);
+        }
+        Chunk chunk = getChunk(chunkType);
+        if(chunk == null && required)
+            throw new IOException("Chunk '" + clazz.getSimpleName() + "' empty");
+        return (T)chunk;
+    }
+
     private void prepareReadData() throws IOException {
         byte[] dataKey;
 
@@ -224,11 +237,11 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
             throw new IOException("Empty authKey");
         }
 
-        DefaultHeaderChunk defaultHeader = new DefaultHeaderChunk(getChunk(Jasf3ChunkType.DEFAULT_HEADER));
-        AsymAlgorithmChunk asymAlgorithmChunk = new AsymAlgorithmChunk(getChunk(Jasf3ChunkType.ASYM_ALGORITHM));
-        EncryptedDataKeyChunk encryptedDataKeyChunk = new EncryptedDataKeyChunk(getChunk(Jasf3ChunkType.ENCRYPTED_SEED_KEY));
-        DataAlgorithmChunk dataAlgorithmChunk = new DataAlgorithmChunk(getChunk(Jasf3ChunkType.DATA_ALGORITHM));
-        DataIvChunk dataIVChunk = new DataIvChunk(getChunk(Jasf3ChunkType.DATA_IV));
+        DefaultHeaderChunk defaultHeader = getSpecialChunk(DefaultHeaderChunk.class, true);
+        AsymAlgorithmChunk asymAlgorithmChunk = getSpecialChunk(AsymAlgorithmChunk.class, true);
+        EncryptedSeedKeyChunk encryptedSeedKeyChunk = getSpecialChunk(EncryptedSeedKeyChunk.class, true);
+        DataAlgorithmChunk dataAlgorithmChunk = getSpecialChunk(DataAlgorithmChunk.class, true);
+        DataIvChunk dataIVChunk = getSpecialChunk(DataIvChunk.class, true);
 
         this.algorithmInfo = asymAlgorithmChunk.algorithmInfo();
 
@@ -261,13 +274,13 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
                 KeyAgreement keyAgreement = KeyAgreement.getInstance("ECDH", this.securityProvider);
                 KeyFactory keyFactory = KeyFactory.getInstance(this.algorithmInfo.getAlgorithm().getAlgorithm(), securityProvider);
                 if (this.asymKey instanceof ECPublicKey) {
-                    PKCS8EncodedKeySpec localKeySpec = new PKCS8EncodedKeySpec(encryptedDataKeyChunk.data());
+                    PKCS8EncodedKeySpec localKeySpec = new PKCS8EncodedKeySpec(encryptedSeedKeyChunk.data());
                     // For Sign
                     keyAgreement.init(keyFactory.generatePrivate(localKeySpec));
                     keyAgreement.doPhase(this.asymKey, true);
                 } else if (this.asymKey instanceof ECPrivateKey) {
                     // Public Encrypt
-                    X509EncodedKeySpec localKeySpec = new X509EncodedKeySpec(encryptedDataKeyChunk.data());
+                    X509EncodedKeySpec localKeySpec = new X509EncodedKeySpec(encryptedSeedKeyChunk.data());
                     this.localPublicKey = keyFactory.generatePublic(localKeySpec);
                     keyAgreement.init(this.asymKey);
                     keyAgreement.doPhase(this.localPublicKey, true);
@@ -278,7 +291,7 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
             } else if (this.asymKey instanceof RSAKey) {
                 Cipher seedKeyCipher = Cipher.getInstance("RSA/ECB/OAEPPadding", this.securityProvider);
                 seedKeyCipher.init(Cipher.DECRYPT_MODE, this.asymKey);
-                seedKey = seedKeyCipher.doFinal(encryptedDataKeyChunk.data());
+                seedKey = seedKeyCipher.doFinal(encryptedSeedKeyChunk.data());
             } else {
                 throw new RuntimeException("Unknown AsymKey Type");
             }
@@ -300,8 +313,6 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
         // ========== prepare ReadData =========
 
         try {
-            byte[] dataIV = dataIVChunk.data();
-
             try {
                 this.dataCipher = Cipher.getInstance(dataAlgorithmChunk.dataAlgorithm().getIdentifier().getId(), this.securityProvider);
             }catch (NoSuchAlgorithmException algoException) {
@@ -309,12 +320,12 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
             }
 
             if(dataAlgorithmChunk.dataAlgorithm().isContainMac()) {
-                GCMParameterSpec gcmParameterSpec = new GCMParameterSpec(128, dataIV);
+                GCMParameterSpec gcmParameterSpec = new GCMParameterSpec(128, dataIVChunk.getIv());
                 this.dataCipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(dataKey, dataAlgorithmChunk.dataAlgorithm().getAlgorithm().split("/", 2)[0]), gcmParameterSpec);
                 this.dataCipher.updateAAD(this.authKey);
                 this.authTag = new byte[this.dataCipher.getBlockSize()];
             }else{
-                this.dataCipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(dataKey, dataAlgorithmChunk.dataAlgorithm().getAlgorithm().split("/", 2)[0]), new IvParameterSpec(dataIV));
+                this.dataCipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(dataKey, dataAlgorithmChunk.dataAlgorithm().getAlgorithm().split("/", 2)[0]), new IvParameterSpec(dataIVChunk.getIv()));
                 this.dataMac = Mac.getInstance("HmacSHA256", this.securityProvider);
             }
         } catch (Exception e) {
@@ -340,12 +351,12 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
         }
 
         byte[] fingerprint = this.fingerprintDigest.digest(this.authTag);
-        FooterFingerprintChunk footerFingerprintChunk = new FooterFingerprintChunk(getChunk(Jasf3ChunkType.FOOTER_FINGERPRINT));
-        if(!Arrays.equals(fingerprint, footerFingerprintChunk.fingerprint())) {
+        FooterChunk footerChunk = getSpecialChunk(FooterChunk.class, true);
+        if(!Arrays.equals(fingerprint, footerChunk.fingerprint())) {
             throw new ValidateFailedException("Header Integrity validation failed");
         }
         try {
-            verifySignData(footerFingerprintChunk.signature(), fingerprint);
+            verifySignData(footerChunk.signature(), fingerprint);
         } catch (ValidateFailedException e) {
             throw e;
         } catch (Exception e) {

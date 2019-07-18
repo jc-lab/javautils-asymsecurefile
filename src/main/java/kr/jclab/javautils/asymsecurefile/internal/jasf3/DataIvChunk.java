@@ -13,32 +13,41 @@ import kr.jclab.javautils.asymsecurefile.InvalidFileException;
 
 import java.util.Arrays;
 
-public class DataIvChunk {
-    private byte[] data = null;
+public class DataIvChunk extends Chunk {
+    public static final Jasf3ChunkType CHUNK_TYPE = Jasf3ChunkType.DATA_IV;
+    private final byte[] iv;
 
-    public DataIvChunk() {
+    public DataIvChunk(byte[] iv) {
+        super(CHUNK_TYPE.value(), (short)0, (short)iv.length, iv);
+        this.iv = Arrays.copyOf(iv, iv.length);
     }
 
-    public DataIvChunk(Chunk chunk) throws InvalidFileException {
-        if(chunk == null)
-            throw new InvalidFileException("Not exists DataIv");
-        if(chunk.getDataSize() < 1) {
+    public DataIvChunk(Short dataSize, byte[] data) throws InvalidFileException {
+        super(CHUNK_TYPE.value(), (short)0, (short)data.length, data);
+        if(dataSize < 1) {
             throw new InvalidFileException("Invalid DataIv");
         }
-        this.data = chunk.getData();
-        if(this.data.length != chunk.getDataSize())
-            this.data = Arrays.copyOf(this.data, chunk.getDataSize());
+        this.iv = Arrays.copyOf(data, dataSize);
     }
 
-    public Chunk build() {
-        return new Chunk(Jasf3ChunkType.DATA_IV.value(), this.data);
+    public byte[] getIv() {
+        return this.iv;
     }
 
-    public byte[] data() {
-        return this.data;
+    public static final Builder builder() {
+        return new Builder();
     }
-    public DataIvChunk data(byte[] data) {
-        this.data = data;
-        return this;
+
+    public static final class Builder {
+        private byte[] iv;
+
+        public Builder withIv(byte[] iv) {
+            this.iv = iv;
+            return this;
+        }
+
+        public DataIvChunk build() {
+            return new DataIvChunk(this.iv);
+        }
     }
 }

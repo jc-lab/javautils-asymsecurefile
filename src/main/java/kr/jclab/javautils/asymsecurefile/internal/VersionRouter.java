@@ -8,7 +8,7 @@
 
 package kr.jclab.javautils.asymsecurefile.internal;
 
-import kr.jclab.javautils.asymsecurefile.NotSupportVersion;
+import kr.jclab.javautils.asymsecurefile.NotSupportVersionException;
 import kr.jclab.javautils.asymsecurefile.internal.jasf3.Jasf3InputStreamDelegate;
 import kr.jclab.javautils.asymsecurefile.internal.jasf3.Jasf3OutputStreamDelegate;
 import kr.jclab.javautils.asymsecurefile.internal.signedsecurefile.SignedSecureFileInputStreamDelegate;
@@ -26,19 +26,19 @@ public class VersionRouter {
         WRITER_MAP.put((byte)3, Jasf3OutputStreamDelegate.class);
     }
 
-    public static Class<? extends InputStreamDelegate> findReaderDelegate(byte version) throws NotSupportVersion {
+    public static Class<? extends InputStreamDelegate> findReaderDelegate(byte version) throws NotSupportVersionException {
         Class<? extends InputStreamDelegate> delegateClass = READER_MAP.get(version);
         if(delegateClass == null) {
-            throw new NotSupportVersion("Not Support Reader: version=" + version);
+            throw new NotSupportVersionException("Not Support Reader: version=" + version);
         }
         return delegateClass;
     }
 
-    public static Class<? extends OutputStreamDelegate> findWriterDelegate(byte version) throws NotSupportVersion {
+    public static Class<? extends OutputStreamDelegate> findWriterDelegate(byte version) throws NotSupportVersionException {
         if(version != (byte)0xff) {
             Class<? extends OutputStreamDelegate> delegateClass = WRITER_MAP.get(version);
             if (delegateClass == null) {
-                throw new NotSupportVersion("Not Support Writer: version=" + version);
+                throw new NotSupportVersionException("Not Support Writer: version=" + version);
             }
             return delegateClass;
         }

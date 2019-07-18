@@ -10,5 +10,5 @@ package kr.jclab.javautils.asymsecurefile;
 
 import java.io.IOException;
 
-public class NotSupportAlgorithm extends IOException {
+public class NotSupportAlgorithmException extends IOException {
 }

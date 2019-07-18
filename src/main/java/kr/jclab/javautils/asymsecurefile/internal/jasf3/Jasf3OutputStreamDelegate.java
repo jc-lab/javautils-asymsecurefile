@@ -12,6 +12,7 @@ import kr.jclab.javautils.asymsecurefile.*;
 import kr.jclab.javautils.asymsecurefile.internal.AlgorithmInfo;
 import kr.jclab.javautils.asymsecurefile.internal.OutputStreamDelegate;
 import kr.jclab.javautils.asymsecurefile.internal.SignatureHeader;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import javax.crypto.*;
 import javax.crypto.spec.GCMParameterSpec;
@@ -81,25 +82,25 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
 
         this.algorithmInfo = new AlgorithmInfo(key);
         if(this.algorithmInfo.getAlgorithm() == null) {
-            throw new NotSupportAlgorithm();
+            throw new NotSupportAlgorithmException();
         }
         this.asymKey = key;
         this.authKey = authKey;
         this.dataAlgorithm = dataAlgorithm;
-        setRawChunk(new AsymAlgorithmChunk().algorithmInfo(this.algorithmInfo).build());
+        setRawChunk(AsymAlgorithmChunk.builder().withAlgorithmInfo(this.algorithmInfo).build());
 
         // ========== Generate SeedKey and DataKey & Store to chunk ==========
 
         try {
-            EncryptedDataKeyChunk encryptedSeedKeyChunk = new EncryptedDataKeyChunk();
-            Mac dataKeyMac = Mac.getInstance("HmacSHA256", this.securityProvider);
+            EncryptedSeedKeyChunk.Builder encryptedSeedKeyChunkBuilder = EncryptedSeedKeyChunk.builder();
+            Mac dataKeyMac = Mac.getInstance("HmacSHA256");
             byte[] seedKey;
             dataKeyMac.init(new SecretKeySpec(this.authKey, dataKeyMac.getAlgorithm()));
 
             if (this.asymKey instanceof ECKey) {
                 byte[] encodedLocalKey;
                 KeyAgreement keyAgreement = KeyAgreement.getInstance("ECDH", this.securityProvider);
-                KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance(this.algorithmInfo.getAlgorithm().getAlgorithm(), securityProvider);
+                KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance(this.algorithmInfo.getAlgorithm().getAlgorithm());
                 keyPairGenerator.initialize(((ECKey) this.asymKey).getParams().getCurve().getField().getFieldSize());
                 localKeyPair = keyPairGenerator.generateKeyPair();
                 if (this.asymKey instanceof ECPrivateKey) {
@@ -116,13 +117,13 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
                     throw new RuntimeException("Unknown Error");
                 }
                 seedKey = keyAgreement.generateSecret();
-                encryptedSeedKeyChunk.data(encodedLocalKey);
+                encryptedSeedKeyChunkBuilder.withData(encodedLocalKey);
             } else if (this.asymKey instanceof RSAKey) {
                 Cipher seedKeyCipher = Cipher.getInstance("RSA/ECB/OAEPPadding", this.securityProvider);
                 seedKey = new byte[32];
                 this.random.nextBytes(seedKey);
                 seedKeyCipher.init(Cipher.ENCRYPT_MODE, this.asymKey);
-                encryptedSeedKeyChunk.data(seedKeyCipher.doFinal(seedKey));
+                encryptedSeedKeyChunkBuilder.withData(seedKeyCipher.doFinal(seedKey));
             } else {
                 throw new RuntimeException("Unknown AsymKey Type");
             }
@@ -137,13 +138,13 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
                 }
             }
 
-            setRawChunk(encryptedSeedKeyChunk.build());
+            setRawChunk(encryptedSeedKeyChunkBuilder.build());
         } catch (Exception e) {
             throw new IOException(e);
         }
 
         // ========== prepare WriteData =========
-        this.setRawChunk(new DefaultHeaderChunk().operationType(this.operationType).build());
+        this.setRawChunk(DefaultHeaderChunk.builder().withOperationType(this.operationType).build());
         try {
             byte[] dataIV = new byte[16];
             this.random.nextBytes(dataIV);
@@ -166,8 +167,8 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
 
             dataIV = this.dataCipher.getIV();
 
-            setRawChunk(new DataAlgorithmChunk().dataAlgorithm(this.dataAlgorithm).build());
-            setRawChunk(new DataIvChunk().data(dataIV).build());
+            setRawChunk(DataAlgorithmChunk.builder().withDataAlgorithm(this.dataAlgorithm).build());
+            setRawChunk(DataIvChunk.builder().withIv(dataIV).build());
         } catch (Exception e) {
             throw new IOException(e);
         }
@@ -218,7 +219,7 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
                 }else{
                     ciphertext = dataCipher.doFinal();
                 }
-                writeRawChunk(new Chunk(Jasf3ChunkType.DATA_STREAM.value(), (short)0, (short)ciphertext.length, ciphertext));
+                writeRawChunk(new RawChunk(Jasf3ChunkType.DATA_STREAM.value(), (short)0, (short)ciphertext.length, ciphertext));
                 pos = ciphertext.length - this.dataCipher.getBlockSize();
                 this.authTag = new byte[this.dataCipher.getBlockSize()];
                 System.arraycopy(ciphertext, pos, this.authTag, 0, this.dataCipher.getBlockSize());
@@ -235,7 +236,7 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
 
     private void writeDataChunk() throws IOException {
         byte[] ciphertext = dataCipher.update(this.writingDataTempBuffer.toByteArray(), 0, this.writingDataTempBuffer.size());
-        writeRawChunk(new Chunk(Jasf3ChunkType.DATA_STREAM.value(), (short)0, (short)ciphertext.length, ciphertext));
+        writeRawChunk(new RawChunk(Jasf3ChunkType.DATA_STREAM.value(), (short)0, (short)ciphertext.length, ciphertext));
     }
 
     private void writeRawChunk(Chunk chunk) throws IOException {
@@ -271,16 +272,16 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
 
     private void writeFooter() throws IOException {
         byte[] fingerprint = this.fingerprintDigest.digest(this.authTag);
-        FooterFingerprintChunk footerFingerprintChunk = new FooterFingerprintChunk()
-                .fingerprint(fingerprint)
-                .totalFileSizeWithoutFooter(this.getWrittenBytes());
+        FooterChunk.Builder footerChunkBuilder = FooterChunk.builder()
+                .withFingerprint(fingerprint)
+                .withTotalFileSizeWithoutFooter(this.getWrittenBytes());
 
         try {
-            footerFingerprintChunk.signature(signData(fingerprint));
+            footerChunkBuilder.withSignature(signData(fingerprint));
         } catch (Exception e) {
             throw new IOException(e);
         }
-        writeRawChunk(footerFingerprintChunk.build());
+        writeRawChunk(footerChunkBuilder.build());
         outputStream.flush();
     }
 

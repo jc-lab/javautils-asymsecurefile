@@ -14,15 +14,19 @@ import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 
 import java.security.Key;
+import java.security.interfaces.ECKey;
+import java.security.interfaces.RSAKey;
 
 public class AlgorithmInfo {
     private final AsymAlgorithm algorithm;
     private final ASN1ObjectIdentifier oid;
+    private final int keySize;
 
     public AlgorithmInfo(Key key) {
         AsymAlgorithm algorithm = null;
         byte[] encoded = key.getEncoded();
         ASN1ObjectIdentifier keySpecOid = null;
+        int keySize = 0;
         if("PKCS#8".equalsIgnoreCase(key.getFormat())) {
             // Private Key
             PrivateKeyInfo privateKeyInfo = PrivateKeyInfo.getInstance(encoded);
@@ -38,33 +42,30 @@ public class AlgorithmInfo {
             }
         }
         for(AsymAlgorithm item : AsymAlgorithm.values()) {
-            for(ASN1ObjectIdentifier oid : item.getIdentifiers()) {
-                if(oid.equals(keySpecOid)) {
-                    algorithm = item;
-                    break;
-                }
+            if(keySpecOid.equals(item.getIdentifier()) || keySpecOid.on(item.getIdentifier())) {
+                algorithm = item;
+                break;
             }
-            if(algorithm != null)
+        }
+
+        switch (algorithm) {
+            case EC:
+                keySize = ((ECKey)key).getParams().getCurve().getField().getFieldSize();
+                break;
+            case RSA:
+                keySize = ((RSAKey)key).getModulus().bitLength();
                 break;
         }
+
         this.algorithm = algorithm;
         this.oid = keySpecOid;
+        this.keySize = keySize;
     }
 
-    public AlgorithmInfo(ASN1ObjectIdentifier keySpecOid) {
-        AsymAlgorithm algorithm = null;
-        for(AsymAlgorithm item : AsymAlgorithm.values()) {
-            for(ASN1ObjectIdentifier oid : item.getIdentifiers()) {
-                if(oid.equals(keySpecOid)) {
-                    algorithm = item;
-                    break;
-                }
-            }
-            if(algorithm != null)
-                break;
-        }
-        this.algorithm = algorithm;
-        this.oid = keySpecOid;
+    public AlgorithmInfo(AsymAlgorithm asymAlgorithm, int keySize, ASN1ObjectIdentifier oid) {
+        this.algorithm = asymAlgorithm;
+        this.keySize = keySize;
+        this.oid = oid;
     }
 
     public AsymAlgorithm getAlgorithm() {
@@ -73,5 +74,9 @@ public class AlgorithmInfo {
 
     public ASN1ObjectIdentifier getOid() {
         return oid;
+    }
+
+    public int getKeySize() {
+        return keySize;
     }
 }
