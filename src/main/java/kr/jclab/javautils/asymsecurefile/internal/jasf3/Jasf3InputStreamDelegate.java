@@ -206,6 +206,9 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
                 if(dataChunkQueueItem.readRemaining() > 0) {
                     this.plainDataQueue.offerFirst(dataChunkQueueItem); // Re-insert
                 }
+            }else{
+                if(this.state == State.READ_DONE)
+                    return -1;
             }
         }
         return readSize;
