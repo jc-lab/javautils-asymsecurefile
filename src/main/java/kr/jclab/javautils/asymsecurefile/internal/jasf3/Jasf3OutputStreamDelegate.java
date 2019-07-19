@@ -94,19 +94,21 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
 
             this.authEncKey = MessageDigest.getInstance("SHA-256").digest(this.authKey);
 
-            if (this.asymKey instanceof ECKey) {
+            if ((this.algorithmInfo.getAlgorithm() == AsymAlgorithm.EC) || (this.algorithmInfo.getAlgorithm() == AsymAlgorithm.PRIME)) {
                 byte[] encodedLocalKey;
-                KeyAgreement keyAgreement = KeyAgreement.getInstance("ECDH", this.securityProvider);
+                KeyAgreement keyAgreement;
                 KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance(this.algorithmInfo.getAlgorithm().getAlgorithm());
                 keyPairGenerator.initialize(((ECKey) this.asymKey).getParams().getCurve().getField().getFieldSize());
                 localKeyPair = keyPairGenerator.generateKeyPair();
-                if (this.asymKey instanceof ECPrivateKey) {
+                if (this.operationType == OperationType.SIGN) {
                     // For Sign
+                    keyAgreement = KeyAgreement.getInstance("ECDH", this.securityProvider);
                     keyAgreement.init(this.asymKey);
                     keyAgreement.doPhase(localKeyPair.getPublic(), true);
                     encodedLocalKey = localKeyPair.getPrivate().getEncoded();
-                } else if (this.asymKey instanceof ECPublicKey) {
+                } else if (this.operationType == OperationType.PUBLIC_ENCRYPT) {
                     // Public Encrypt
+                    keyAgreement = KeyAgreement.getInstance("ECDH", this.workSecurityProvider);
                     keyAgreement.init(localKeyPair.getPrivate());
                     keyAgreement.doPhase(this.asymKey, true);
                     encodedLocalKey = localKeyPair.getPublic().getEncoded();
@@ -115,7 +117,7 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
                 }
                 seedKey = keyAgreement.generateSecret();
                 encryptedSeedKeyChunkBuilder.withData(encodedLocalKey);
-            } else if (this.asymKey instanceof RSAKey) {
+            } else if (this.algorithmInfo.getAlgorithm() == AsymAlgorithm.RSA) {
                 Cipher seedKeyCipher = Cipher.getInstance("RSA/ECB/OAEPPadding", this.securityProvider);
                 seedKey = new byte[32];
                 this.random.nextBytes(seedKey);

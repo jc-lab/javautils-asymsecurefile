@@ -322,25 +322,27 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
             byte[] seedKey;
             dataKeyMac.init(new SecretKeySpec(this.authKey, dataKeyMac.getAlgorithm()));
 
-            if (this.asymKey instanceof ECKey) {
-                KeyAgreement keyAgreement = KeyAgreement.getInstance("ECDH", this.securityProvider);
+            if ((this.algorithmInfo.getAlgorithm() == AsymAlgorithm.EC) || (this.algorithmInfo.getAlgorithm() == AsymAlgorithm.PRIME)) {
+                KeyAgreement keyAgreement;
                 KeyFactory keyFactory = KeyFactory.getInstance(this.algorithmInfo.getAlgorithm().getAlgorithm(), this.workSecurityProvider);
-                if (this.asymKey instanceof ECPublicKey) {
+                if (defaultHeader.operationType() == OperationType.SIGN) {
                     PKCS8EncodedKeySpec localKeySpec = new PKCS8EncodedKeySpec(encryptedSeedKeyChunk.data());
                     // For Sign
+                    keyAgreement = KeyAgreement.getInstance("ECDH", this.workSecurityProvider);
                     keyAgreement.init(keyFactory.generatePrivate(localKeySpec));
                     keyAgreement.doPhase(this.asymKey, true);
-                } else if (this.asymKey instanceof ECPrivateKey) {
+                } else if (defaultHeader.operationType() == OperationType.PUBLIC_ENCRYPT) {
                     // Public Encrypt
                     X509EncodedKeySpec localKeySpec = new X509EncodedKeySpec(encryptedSeedKeyChunk.data());
                     this.localPublicKey = keyFactory.generatePublic(localKeySpec);
+                    keyAgreement = KeyAgreement.getInstance("ECDH", this.securityProvider);
                     keyAgreement.init(this.asymKey);
                     keyAgreement.doPhase(this.localPublicKey, true);
                 } else {
                     throw new RuntimeException("Unknown Error");
                 }
                 seedKey = keyAgreement.generateSecret();
-            } else if (this.asymKey instanceof RSAKey) {
+            } else if (this.algorithmInfo.getAlgorithm() == AsymAlgorithm.RSA) {
                 Cipher seedKeyCipher = Cipher.getInstance("RSA/ECB/OAEPPadding", this.securityProvider);
                 seedKeyCipher.init(Cipher.DECRYPT_MODE, this.asymKey);
                 seedKey = seedKeyCipher.doFinal(encryptedSeedKeyChunk.data());
