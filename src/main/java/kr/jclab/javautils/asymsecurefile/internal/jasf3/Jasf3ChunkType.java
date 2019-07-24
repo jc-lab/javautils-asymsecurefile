@@ -13,6 +13,7 @@ public enum Jasf3ChunkType {
     ASYM_ALGORITHM((byte)0x02), // OID
     DATA_ALGORITHM((byte)0x03), // OID
     ENCRYPTED_SEED_KEY((byte)0x04),
+    SEED_KEY_CHECK((byte)0x05),
     DATA_IV((byte)0x11), // Block size
     DATA_STREAM((byte)0x70),
     FOOTER_FINGERPRINT((byte)0x7A);

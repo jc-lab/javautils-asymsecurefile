@@ -18,6 +18,7 @@ import java.io.OutputStream;
 import java.lang.reflect.InvocationTargetException;
 import java.security.Key;
 import java.security.KeyPair;
+import java.security.PrivateKey;
 import java.security.Provider;
 
 public class AsymSecureFileOutputStream extends OutputStream {
@@ -28,6 +29,7 @@ public class AsymSecureFileOutputStream extends OutputStream {
     private boolean finished = false;
 
     private transient Key asymKey = null;
+    private transient PrivateKey localPrivateKey = null;
     private AsymAlgorithm asymAlgorithm = null;
     private byte[] authKey = null;
     private DataAlgorithm dataAlgorithm = DataAlgorithm.AES256_GCM;
@@ -47,6 +49,17 @@ public class AsymSecureFileOutputStream extends OutputStream {
     @SuppressWarnings("unused")
     public AsymSecureFileOutputStream(OperationType operationType, OutputStream outputStream) {
         this(operationType, outputStream, new BouncyCastleProvider());
+    }
+
+    /**
+     * Set local private key for PUBLIC_ENCRYPT.
+     * Must be set before setAsymKey.
+     */
+    public void setLocalPrivateKey(PrivateKey privateKey) throws IOException {
+        if(this.delegate.getOperationType() != OperationType.PUBLIC_ENCRYPT) {
+            throw new IOException("The local private key is only used in PUBLIC_ENCRYPT.");
+        }
+        this.localPrivateKey = privateKey;
     }
 
     /**
@@ -161,9 +174,10 @@ public class AsymSecureFileOutputStream extends OutputStream {
         if(this.inited)
             return ;
         if(this.asymKey != null && this.dataAlgorithm != null && this.authKey != null) {
-            this.delegate.init(this.asymKey, this.asymAlgorithm, this.dataAlgorithm, this.authKey);
+            this.delegate.init(this.asymKey, this.asymAlgorithm, this.dataAlgorithm, this.authKey, this.localPrivateKey);
             this.asymKey = null;
             this.authKey = null;
+            this.localPrivateKey = null;
             this.inited = true;
         }else if(force) {
             if(this.asymKey == null) {

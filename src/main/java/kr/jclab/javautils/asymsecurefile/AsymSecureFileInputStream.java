@@ -76,7 +76,7 @@ public class AsymSecureFileInputStream extends InputStream {
      * @param authKey authKey
      */
     @SuppressWarnings("unused")
-    public void setAuthKey(@NotNull byte[] authKey) {
+    public void setAuthKey(@NotNull byte[] authKey) throws IOException {
         this.delegate.setAuthKey(authKey);
     }
 

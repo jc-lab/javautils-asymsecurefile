@@ -14,9 +14,9 @@ import org.bouncycastle.asn1.sec.SECObjectIdentifiers;
 import org.bouncycastle.asn1.x9.X9ObjectIdentifiers;
 
 public enum AsymAlgorithm {
-    EC((byte)0x11, SECObjectIdentifiers.ellipticCurve, "EC", "ECDSA"),
-    PRIME((byte)0x12, X9ObjectIdentifiers.primeCurve, "EC", "ECDSA"),
-    RSA((byte)0x20, PKCSObjectIdentifiers.rsaEncryption, "RSA", "DSA");
+    EC((byte)0x11, SECObjectIdentifiers.ellipticCurve, "EC", "NONEWithECDSA"),
+    PRIME((byte)0x12, X9ObjectIdentifiers.primeCurve, "EC", "NONEWithECDSA"),
+    RSA((byte)0x20, PKCSObjectIdentifiers.rsaEncryption, "RSA", "NONEWithRSA");
 
     private final byte keyType;
     private final ASN1ObjectIdentifier identifier;

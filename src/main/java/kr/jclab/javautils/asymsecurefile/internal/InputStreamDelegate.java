@@ -30,7 +30,7 @@ public abstract class InputStreamDelegate {
 
     public abstract void setAsymKey(Key key);
     public abstract void setAsymKey(KeyPair keyPair);
-    public abstract void setAuthKey(byte[] authKey);
+    public abstract void setAuthKey(byte[] authKey) throws IOException;
 
     public abstract int headerRead() throws IOException;
     public abstract int available() throws IOException;

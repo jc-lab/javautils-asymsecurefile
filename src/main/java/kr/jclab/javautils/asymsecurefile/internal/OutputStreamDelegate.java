@@ -13,6 +13,7 @@ import kr.jclab.javautils.asymsecurefile.*;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.security.Key;
+import java.security.PrivateKey;
 import java.security.Provider;
 
 public abstract class OutputStreamDelegate {
@@ -66,7 +67,7 @@ public abstract class OutputStreamDelegate {
         return this.operationType;
     }
 
-    public abstract void init(Key key, AsymAlgorithm asymAlgorithm, DataAlgorithm dataAlgorithm, byte[] authKey) throws IOException;
+    public abstract void init(Key key, AsymAlgorithm asymAlgorithm, DataAlgorithm dataAlgorithm, byte[] authKey, PrivateKey localPrivateKey) throws IOException;
 
     public abstract void write(byte[] buffer, int off, int size) throws IOException;
     public abstract void finish() throws IOException;

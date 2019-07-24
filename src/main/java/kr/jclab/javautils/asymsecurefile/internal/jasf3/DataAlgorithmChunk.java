@@ -48,20 +48,21 @@ public class DataAlgorithmChunk extends Chunk {
         if(buffer.length != dataSize)
             buffer = Arrays.copyOf(data, dataSize);
 
+        ASN1Primitive primitive = null;
         try {
-            ASN1Primitive primitive = ASN1ObjectIdentifier.fromByteArray(buffer);
-            ASN1ObjectIdentifier asymAlgoOid = (primitive instanceof ASN1ObjectIdentifier) ? ((ASN1ObjectIdentifier)primitive) : null;
-            if(asymAlgoOid == null) {
-                throw new IOException("ERROR");
-            }
-            for(DataAlgorithm item : DataAlgorithm.values()) {
-                if(item.getIdentifier().equals(asymAlgoOid)) {
-                    dataAlgorithm = item;
-                    break;
-                }
-            }
+            primitive = ASN1ObjectIdentifier.fromByteArray(buffer);
         } catch (IOException e) {
-            e.printStackTrace();
+            throw new InvalidFileException(e);
+        }
+        ASN1ObjectIdentifier asymAlgoOid = (primitive instanceof ASN1ObjectIdentifier) ? ((ASN1ObjectIdentifier)primitive) : null;
+        if(asymAlgoOid == null) {
+            throw new InvalidFileException("ERROR");
+        }
+        for(DataAlgorithm item : DataAlgorithm.values()) {
+            if(item.getIdentifier().equals(asymAlgoOid)) {
+                dataAlgorithm = item;
+                break;
+            }
         }
 
         this.dataAlgorithm = dataAlgorithm;

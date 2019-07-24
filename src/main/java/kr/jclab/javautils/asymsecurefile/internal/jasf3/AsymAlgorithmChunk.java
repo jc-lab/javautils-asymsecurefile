@@ -16,6 +16,7 @@ import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1Primitive;
 
 import java.io.IOException;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 
@@ -43,27 +44,31 @@ public class AsymAlgorithmChunk extends Chunk {
      */
     public AsymAlgorithmChunk(Short dataSize, byte[] data) throws InvalidFileException {
         super(CHUNK_TYPE.value(), (short)0, dataSize, data);
-
         AlgorithmInfo algorithmInfo = null;
-        ByteBuffer buffer = ByteBuffer.wrap(data, 0, dataSize).order(ByteOrder.LITTLE_ENDIAN);
-        byte keyType = buffer.get();
-        int keySize = buffer.getInt();
-        byte[] asn1Oid = new byte[buffer.remaining()];
-        buffer.get(asn1Oid);
-        for(AsymAlgorithm item : AsymAlgorithm.values()) {
-            if(item.getKeyType() == keyType) {
-                try {
-                    ASN1Primitive primitive = ASN1ObjectIdentifier.fromByteArray(asn1Oid);
-                    ASN1ObjectIdentifier asymAlgoOid = (primitive instanceof ASN1ObjectIdentifier) ? ((ASN1ObjectIdentifier)primitive) : null;
-                    if(asymAlgoOid == null) {
-                        throw new IOException("ERROR");
+
+        try {
+            ByteBuffer buffer = ByteBuffer.wrap(data, 0, dataSize).order(ByteOrder.LITTLE_ENDIAN);
+            byte keyType = buffer.get();
+            int keySize = buffer.getInt();
+            byte[] asn1Oid = new byte[buffer.remaining()];
+            buffer.get(asn1Oid);
+            for (AsymAlgorithm item : AsymAlgorithm.values()) {
+                if (item.getKeyType() == keyType) {
+                    try {
+                        ASN1Primitive primitive = ASN1ObjectIdentifier.fromByteArray(asn1Oid);
+                        ASN1ObjectIdentifier asymAlgoOid = (primitive instanceof ASN1ObjectIdentifier) ? ((ASN1ObjectIdentifier) primitive) : null;
+                        if (asymAlgoOid == null) {
+                            throw new IOException("ERROR");
+                        }
+                        algorithmInfo = new AlgorithmInfo(item, keySize, asymAlgoOid);
+                    } catch (IOException e) {
+                        e.printStackTrace();
                     }
-                    algorithmInfo = new AlgorithmInfo(item, keySize, asymAlgoOid);
-                } catch (IOException e) {
-                    e.printStackTrace();
+                    break;
                 }
-                break;
             }
+        }catch (BufferUnderflowException e) {
+            throw new InvalidFileException(e);
         }
 
         this.algorithmInfo = algorithmInfo;

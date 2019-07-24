@@ -25,7 +25,6 @@ import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.security.*;
 import java.security.interfaces.*;
-import java.security.spec.PKCS8EncodedKeySpec;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -57,7 +56,6 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
     private Map<Short, UserChunk> cachedUserChunkMap = null;
 
     private transient byte[] authKey = null;
-    private byte[] authTag = null;
 
     private transient byte[] authEncKey = null;
 
@@ -73,11 +71,14 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
     private Deque<DataChunkQueueItem> cipherDataQueue = new ConcurrentLinkedDeque<>();
     private Deque<DataChunkQueueItem> plainDataQueue = new ConcurrentLinkedDeque<>();
 
+    private DefaultHeaderChunk defaultHeaderChunk;
+    private byte[] macKey;
+
     private boolean footerValidated = false;
     private transient MessageDigest fingerprintDigest = null;
     private transient Cipher dataCipher = null;
-    private transient Mac dataMac = null;
 
+    private boolean basicInited = false;
     private boolean readPrepared = false;
 
     public Jasf3InputStreamDelegate(InputStream inputStream, Provider securityProvider, SignatureHeader signatureHeader) {
@@ -85,13 +86,10 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
     }
 
     @Override
-    public void setAuthKey(byte[] authKey) {
+    public void setAuthKey(byte[] authKey) throws IOException {
         this.authKey = authKey;
-        try {
-            this.authEncKey = MessageDigest.getInstance("SHA-256").digest(this.authKey);
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException(e);
-        }
+        if(!this.basicInited && this.authKey != null && (this.state != State.READ_HEADER))
+            initBasic();
     }
 
     @Override
@@ -113,7 +111,6 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
                 prepareReadData();
             while ((item = this.cipherDataQueue.poll()) != null) {
                 this.plainDataQueue.add(new DataChunkQueueItem(this.dataCipher.update(item.getBuffer(), 0, item.getSize())));
-                System.arraycopy(item.buffer, item.size - this.authTag.length, this.authTag, 0, this.authTag.length);
             }
         }
 
@@ -130,6 +127,8 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
                             break;
                         }
                         this.state = State.READ_DATA;
+                        if(!this.basicInited && this.authKey != null)
+                            initBasic();
                         rc = 0;
                         if(!this.readPrepared && ((this.asymKey != null) || (this.asymKeyPair != null)) && (this.authKey != null))
                             prepareReadData();
@@ -141,7 +140,6 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
                     case READ_DATA:
                         if (this.readingChunk.primaryType == Jasf3ChunkType.DATA_STREAM.value()) {
                             this.plainDataQueue.offer(new DataChunkQueueItem(this.dataCipher.update(this.readingChunk.getData(), 0, this.readingChunk.size)));
-                            System.arraycopy(this.readingChunk.getData(), this.readingChunk.size - this.authTag.length, this.authTag, 0, this.authTag.length);
                             break;
                         }
                     case READ_FOOTER:
@@ -219,7 +217,6 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
             return ;
 
         final Map<Short, UserChunk> userChunkMap = new HashMap<>();
-        DataAlgorithmChunk dataAlgorithmChunk = getSpecialChunk(DataAlgorithmChunk.class, true);
 
         for(Map.Entry<Integer, Chunk> entry : rawChunkMap.entrySet()) {
             if((entry.getKey() & 0x800000) != 0) {
@@ -229,7 +226,7 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
                     Cipher cipher = null;
                     byte[] plaintext;
                     try {
-                        cipher = createDataCipher(dataAlgorithmChunk, dataIV, this.authEncKey);
+                        cipher = createChunkCipher(dataIV, this.authEncKey, this.authKey);
                         plaintext = cipher.doFinal(rawUserChunk.getData(), 16, rawUserChunk.getDataSize() - 16);
                     } catch (AEADBadTagException e) {
                         throw new ValidateFailedException("UserChunk integrity validation failed");
@@ -285,6 +282,17 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
         return (T)chunk;
     }
 
+    private void initBasic() throws IOException {
+        this.defaultHeaderChunk = getSpecialChunk(DefaultHeaderChunk.class, true);
+        try {
+            Mac authEncKeyMac = Mac.getInstance("HmacSHA256");
+            authEncKeyMac.init(new SecretKeySpec(this.authKey, authEncKeyMac.getAlgorithm()));
+            this.authEncKey = authEncKeyMac.doFinal(defaultHeaderChunk.seed());
+        }catch(Exception e) {
+            throw new IOException(e);
+        }
+    }
+
     private void prepareReadData() throws IOException {
         byte[] dataKey;
 
@@ -292,10 +300,8 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
             throw new IOException("Empty authKey");
         }
 
-        DefaultHeaderChunk defaultHeader = getSpecialChunk(DefaultHeaderChunk.class, true);
         AsymAlgorithmChunk asymAlgorithmChunk = getSpecialChunk(AsymAlgorithmChunk.class, true);
         DataAlgorithmChunk dataAlgorithmChunk = getSpecialChunk(DataAlgorithmChunk.class, true);
-        EncryptedSeedKeyChunk encryptedSeedKeyChunk = getSpecialChunk(EncryptedSeedKeyChunk.class, true);
         DataIvChunk dataIVChunk = getSpecialChunk(DataIvChunk.class, true);
 
         this.algorithmInfo = asymAlgorithmChunk.algorithmInfo();
@@ -304,7 +310,7 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
             if(this.asymKeyPair == null)
                 throw new IllegalStateException("Empty asymKey");
 
-            switch (defaultHeader.operationType()) {
+            switch (this.defaultHeaderChunk.operationType()) {
                 case SIGN:
                     this.asymKey = this.asymKeyPair.getPublic();
                     break;
@@ -321,62 +327,51 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
         // ========== Get SeedKey and DataKey & Store to chunk ==========
 
         try {
-            Mac dataKeyMac = Mac.getInstance("HmacSHA256", this.workSecurityProvider);
-            byte[] seedKey;
-            dataKeyMac.init(new SecretKeySpec(this.authKey, dataKeyMac.getAlgorithm()));
+            if(this.defaultHeaderChunk.operationType() == OperationType.PUBLIC_ENCRYPT) {
+                EncryptedSeedKeyChunk encryptedSeedKeyChunk = getSpecialChunk(EncryptedSeedKeyChunk.class, true);
+                SeedKeyCheckChunk seedKeyCheckChunk = getSpecialChunk(SeedKeyCheckChunk.class, true);
 
-            if ((this.algorithmInfo.getAlgorithm() == AsymAlgorithm.EC) || (this.algorithmInfo.getAlgorithm() == AsymAlgorithm.PRIME)) {
-                KeyAgreement keyAgreement;
-                KeyFactory keyFactory = KeyFactory.getInstance(this.algorithmInfo.getAlgorithm().getAlgorithm(), this.workSecurityProvider);
-                if (defaultHeader.operationType() == OperationType.SIGN) {
-                    PKCS8EncodedKeySpec localKeySpec = new PKCS8EncodedKeySpec(encryptedSeedKeyChunk.data());
-                    // For Sign
-                    keyAgreement = KeyAgreement.getInstance("ECDH", this.workSecurityProvider);
-                    keyAgreement.init(keyFactory.generatePrivate(localKeySpec));
-                    keyAgreement.doPhase(this.asymKey, true);
-                } else if (defaultHeader.operationType() == OperationType.PUBLIC_ENCRYPT) {
-                    // Public Encrypt
+                byte[] seedKey;
+                Mac dataKeyMac = Mac.getInstance("HmacSHA512", this.workSecurityProvider);
+                dataKeyMac.init(new SecretKeySpec(this.authKey, dataKeyMac.getAlgorithm()));
+
+                if ((this.algorithmInfo.getAlgorithm() == AsymAlgorithm.EC) || (this.algorithmInfo.getAlgorithm() == AsymAlgorithm.PRIME)) {
+                    KeyAgreement keyAgreement = KeyAgreement.getInstance("ECDH", this.securityProvider);
+                    KeyFactory keyFactory = KeyFactory.getInstance(this.algorithmInfo.getAlgorithm().getAlgorithm(), this.workSecurityProvider);
                     X509EncodedKeySpec localKeySpec = new X509EncodedKeySpec(encryptedSeedKeyChunk.data());
                     this.localPublicKey = keyFactory.generatePublic(localKeySpec);
-                    keyAgreement = KeyAgreement.getInstance("ECDH", this.securityProvider);
                     keyAgreement.init(this.asymKey);
                     keyAgreement.doPhase(this.localPublicKey, true);
+                    seedKey = keyAgreement.generateSecret();
+                } else if (this.algorithmInfo.getAlgorithm() == AsymAlgorithm.RSA) {
+                    Cipher seedKeyCipher = Cipher.getInstance("RSA/ECB/OAEPPadding", this.securityProvider);
+                    seedKeyCipher.init(Cipher.DECRYPT_MODE, this.asymKey);
+                    seedKey = seedKeyCipher.doFinal(encryptedSeedKeyChunk.data());
                 } else {
-                    throw new RuntimeException("Unknown Error");
+                    throw new RuntimeException("Unknown AsymKey Type");
                 }
-                seedKey = keyAgreement.generateSecret();
-            } else if (this.algorithmInfo.getAlgorithm() == AsymAlgorithm.RSA) {
-                Cipher seedKeyCipher = Cipher.getInstance("RSA/ECB/OAEPPadding", this.securityProvider);
-                seedKeyCipher.init(Cipher.DECRYPT_MODE, this.asymKey);
-                seedKey = seedKeyCipher.doFinal(encryptedSeedKeyChunk.data());
-            } else {
-                throw new RuntimeException("Unknown AsymKey Type");
-            }
+                byte[] bigKey = dataKeyMac.doFinal(seedKey);
+                dataKey = Arrays.copyOfRange(bigKey, 0, 32);
+                this.macKey = Arrays.copyOfRange(bigKey, 32, 64);
 
-            int dataKeySize = dataAlgorithmChunk.dataAlgorithm().getKeySize();
-            dataKey = dataKeyMac.doFinal(seedKey);
-
-            if (dataKeySize != dataKey.length) {
-                if (dataKeySize > dataKey.length) {
-                    dataKey = Arrays.copyOf(dataKey, dataKeySize);
-                } else {
-                    throw new RuntimeException("Unknown Error");
+                if(!seedKeyCheckChunk.verify(seedKey)) {
+                    throw new ValidateFailedException("Different Key");
                 }
-            }
-        } catch (Exception e) {
-            throw new IOException(e);
-        }
 
-        // ========== prepare ReadData =========
-
-        try {
-            this.dataCipher = createDataCipher(dataAlgorithmChunk, dataIVChunk.getIv(), dataKey);
-
-            if(dataAlgorithmChunk.dataAlgorithm().isContainMac()) {
-                this.authTag = new byte[this.dataCipher.getBlockSize()];
+                int dataKeySize = dataAlgorithmChunk.dataAlgorithm().getKeySize();
+                if (dataKeySize != dataKey.length) {
+                    if (dataKeySize > dataKey.length) {
+                        dataKey = Arrays.copyOf(dataKey, dataKeySize);
+                    } else {
+                        throw new RuntimeException("Not support key size = " + (dataKeySize * 8));
+                    }
+                }
             }else{
-                this.dataMac = Mac.getInstance("HmacSHA256", this.securityProvider);
+                dataKey = this.authEncKey;
+                this.macKey = this.authKey;
             }
+
+            this.dataCipher = createDataCipher(dataAlgorithmChunk, dataIVChunk.getIv(), dataKey, this.macKey);
         } catch (Exception e) {
             throw new IOException(e);
         }
@@ -399,13 +394,22 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
             throw new IOException(e);
         }
 
-        byte[] fingerprint = this.fingerprintDigest.digest(this.authTag);
+        byte[] fingerprint = this.fingerprintDigest.digest();
         FooterChunk footerChunk = getSpecialChunk(FooterChunk.class, true);
         if(!Arrays.equals(fingerprint, footerChunk.fingerprint())) {
             throw new ValidateFailedException("Header Integrity validation failed");
         }
         try {
-            verifySignData(footerChunk.signature(), fingerprint);
+            if(this.defaultHeaderChunk.operationType() == OperationType.SIGN) {
+                verifySignData(footerChunk.signature(), fingerprint);
+            }else{
+                Mac mac = Mac.getInstance("HmacSHA256", this.workSecurityProvider);
+                mac.init(new SecretKeySpec(this.macKey, mac.getAlgorithm()));
+                mac.update(fingerprint);
+                if(!Arrays.equals(footerChunk.mac(), mac.doFinal())) {
+                    throw new ValidateFailedException();
+                }
+            }
         } catch (ValidateFailedException e) {
             throw e;
         } catch (Exception e) {
@@ -416,33 +420,15 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
     }
 
     private void verifySignData(byte[] sig, byte[] data) throws InvalidKeyException, NoSuchAlgorithmException, NoSuchPaddingException, BadPaddingException, IllegalBlockSizeException, ValidateFailedException, SignatureException {
-        if(this.asymKey instanceof PublicKey) {
-            // Sign
-            Signature signature = Signature.getInstance(this.algorithmInfo.getAlgorithm().getSignatureAlgorithm(), this.securityProvider);
-            signature.initVerify((PublicKey) this.asymKey);
-            signature.update(data);
-            if(!signature.verify(sig))
-                throw new ValidateFailedException("Integrity validation failed");
-        }else if(this.localPublicKey != null) {
-            // Public Encrypt (EC)
-            Signature signature = Signature.getInstance(this.algorithmInfo.getAlgorithm().getSignatureAlgorithm(), this.securityProvider);
-            signature.initVerify(this.localPublicKey);
-            signature.update(data);
-            if(!signature.verify(sig))
-                throw new ValidateFailedException("Integrity validation failed");
-        }else if(this.asymKey instanceof RSAPrivateKey) {
-            // Public Encrypt (RSA)
-            Cipher cipher = Cipher.getInstance("RSA/ECB/OAEPPadding", this.securityProvider);
-            cipher.init(Cipher.DECRYPT_MODE, this.asymKey);
-            byte[] plaintext = cipher.doFinal(sig);
-            if(!Arrays.equals(plaintext, data))
-                throw new ValidateFailedException("Integrity validation failed");
-        }else{
-            throw new RuntimeException("Unknown Error");
-        }
+        // Sign
+        Signature signature = Signature.getInstance(this.algorithmInfo.getAlgorithm().getSignatureAlgorithm(), this.securityProvider);
+        signature.initVerify((PublicKey) this.asymKey);
+        signature.update(data);
+        if (!signature.verify(sig))
+            throw new ValidateFailedException("Integrity validation failed");
     }
 
-    private Cipher createDataCipher(DataAlgorithmChunk dataAlgorithmChunk, byte[] dataIV, byte[] key) throws IOException, NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException {
+    private Cipher createDataCipher(DataAlgorithmChunk dataAlgorithmChunk, byte[] dataIV, byte[] key, byte[] authKey) throws IOException, NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException {
         Cipher cipher;
         try {
             cipher = Cipher.getInstance(dataAlgorithmChunk.dataAlgorithm().getIdentifier().getId(), this.workSecurityProvider);
@@ -453,10 +439,18 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
         if(dataAlgorithmChunk.dataAlgorithm().isContainMac()) {
             GCMParameterSpec gcmParameterSpec = new GCMParameterSpec(128, dataIV);
             cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, dataAlgorithmChunk.dataAlgorithm().getAlgorithm().split("/", 2)[0]), gcmParameterSpec);
-            cipher.updateAAD(this.authKey);
+            cipher.updateAAD(authKey);
         }else{
             cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, dataAlgorithmChunk.dataAlgorithm().getAlgorithm().split("/", 2)[0]), new IvParameterSpec(dataIV));
         }
+        return cipher;
+    }
+
+    private Cipher createChunkCipher(byte[] dataIV, byte[] key, byte[] authKey) throws IOException, NoSuchPaddingException, NoSuchAlgorithmException, InvalidAlgorithmParameterException, InvalidKeyException {
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding", this.workSecurityProvider);
+        GCMParameterSpec gcmParameterSpec = new GCMParameterSpec(128, dataIV);
+        cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), gcmParameterSpec);
+        cipher.updateAAD(authKey);
         return cipher;
     }
 

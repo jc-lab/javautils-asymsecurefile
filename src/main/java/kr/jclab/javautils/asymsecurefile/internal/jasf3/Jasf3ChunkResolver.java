@@ -13,6 +13,7 @@ public class Jasf3ChunkResolver {
         chunkClasses.put(AsymAlgorithmChunk.CHUNK_TYPE.value(), AsymAlgorithmChunk.class);
         chunkClasses.put(DataAlgorithmChunk.CHUNK_TYPE.value(), DataAlgorithmChunk.class);
         chunkClasses.put(EncryptedSeedKeyChunk.CHUNK_TYPE.value(), EncryptedSeedKeyChunk.class);
+        chunkClasses.put(SeedKeyCheckChunk.CHUNK_TYPE.value(), SeedKeyCheckChunk.class);
         chunkClasses.put(DataIvChunk.CHUNK_TYPE.value(), DataIvChunk.class);
         chunkClasses.put(FooterChunk.CHUNK_TYPE.value(), FooterChunk.class);
     }
