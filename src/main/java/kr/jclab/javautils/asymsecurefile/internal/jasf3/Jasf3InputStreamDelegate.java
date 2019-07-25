@@ -110,7 +110,10 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
             if(!this.readPrepared)
                 prepareReadData();
             while ((item = this.cipherDataQueue.poll()) != null) {
-                this.plainDataQueue.add(new DataChunkQueueItem(this.dataCipher.update(item.getBuffer(), 0, item.getSize())));
+                byte[] buf = this.dataCipher.update(item.getBuffer(), 0, item.getSize());
+                if(buf != null) {
+                    this.plainDataQueue.add(new DataChunkQueueItem(buf));
+                }
             }
         }
 
