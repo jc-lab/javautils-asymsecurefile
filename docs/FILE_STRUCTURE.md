@@ -22,9 +22,16 @@ JsAsymSecureFile은 SignedSecureFile에 대한 하위 호환성 읽기를 지원
 
 ## Basic Defines
 
-**DataKey** = {EC: SHA256(ECDH), RSA:Random 32byte}
+**AuthEncKey** = HmacSHA256(key = authKey, message=defaultHeaderChunk.seed)
 
-**AuthEncKey** = SHA256(AuthKey)
+**DataKey**
+
+* PUBLIC_ENCRYPT Mode :
+  SeedKey = {EC: ECDH Shared Key, RSA : Random}
+
+  HmacSHA512(key = authKey, message = seedKey) -> \[32bytes:dataKey, 32bytes:macKey\]
+
+* SIGN Mode : dataKey=AuthEncKey, macKey=AuthKey
 
 
 
@@ -60,7 +67,8 @@ File Fingerprint Chunk [LAST - 0] {
 	
 	Chunk Type
 	- 0x01 : Fingerprint
-	- 0x02 : Signature
+	- 0x02 : Signature (Sign Mode)
+	- 0x03 : Mac (PUBLIC_ENCRYPT Mode)
 }
 ```
 
@@ -69,7 +77,7 @@ File Fingerprint Chunk [LAST - 0] {
 - 0x01 : Sign mode (Need target private key & AuthKey)
 
   Sign with Private Key (데이터 공개, 수정 불가)
-  Crpytogram : Local Private Key & Signed & Encrypted Data
+  Crpytogram : Signature & Encrypted Data
 
   
 
