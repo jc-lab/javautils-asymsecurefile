@@ -10,6 +10,7 @@ package kr.jclab.javautils.asymsecurefile.internal.jasf3;
 
 import kr.jclab.javautils.asymsecurefile.*;
 import kr.jclab.javautils.asymsecurefile.internal.AlgorithmInfo;
+import kr.jclab.javautils.asymsecurefile.internal.BCProviderSingletone;
 import kr.jclab.javautils.asymsecurefile.internal.OutputStreamDelegate;
 import kr.jclab.javautils.asymsecurefile.internal.SignatureHeader;
 import org.bouncycastle.jcajce.provider.asymmetric.util.EC5Util;
@@ -26,7 +27,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.security.*;
-import java.security.interfaces.*;
+import java.security.interfaces.ECKey;
+import java.security.interfaces.ECPrivateKey;
+import java.security.interfaces.ECPublicKey;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -42,7 +45,7 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
     }
 
     private final Random random = new SecureRandom();
-    private final BouncyCastleProvider workSecurityProvider = new BouncyCastleProvider();
+    private final BouncyCastleProvider workSecurityProvider = BCProviderSingletone.getProvider();
 
     private AlgorithmInfo algorithmInfo = null;
     private transient Key asymKey = null;

@@ -8,8 +8,9 @@
 
 package kr.jclab.javautils.asymsecurefile;
 
-import kr.jclab.javautils.asymsecurefile.internal.VersionRouter;
+import kr.jclab.javautils.asymsecurefile.internal.BCProviderSingletone;
 import kr.jclab.javautils.asymsecurefile.internal.OutputStreamDelegate;
+import kr.jclab.javautils.asymsecurefile.internal.VersionRouter;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import javax.validation.constraints.NotNull;
@@ -37,7 +38,7 @@ public class AsymSecureFileOutputStream extends OutputStream {
     public AsymSecureFileOutputStream(OperationType operationType, OutputStream outputStream, Provider securityProvider) {
         this.outputStream = outputStream;
         if(securityProvider == null)
-            securityProvider = new BouncyCastleProvider();
+            securityProvider = BCProviderSingletone.getProvider();
         try {
             this.delegate = VersionRouter.getWriterDelegate().getDeclaredConstructor(OperationType.class, OutputStream.class, Provider.class).newInstance(operationType, outputStream, securityProvider);
         } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
@@ -48,7 +49,7 @@ public class AsymSecureFileOutputStream extends OutputStream {
 
     @SuppressWarnings("unused")
     public AsymSecureFileOutputStream(OperationType operationType, OutputStream outputStream) {
-        this(operationType, outputStream, new BouncyCastleProvider());
+        this(operationType, outputStream, BCProviderSingletone.getProvider());
     }
 
     /**

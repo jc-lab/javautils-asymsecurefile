@@ -8,6 +8,7 @@
 
 package kr.jclab.javautils.asymsecurefile;
 
+import kr.jclab.javautils.asymsecurefile.internal.BCProviderSingletone;
 import kr.jclab.javautils.asymsecurefile.internal.InputStreamDelegate;
 import kr.jclab.javautils.asymsecurefile.internal.SignatureHeader;
 import kr.jclab.javautils.asymsecurefile.internal.VersionRouter;
@@ -33,7 +34,7 @@ public class AsymSecureFileInputStream extends InputStream {
     public AsymSecureFileInputStream(InputStream inputStream, Provider securityProvider) {
         this.inputStream = inputStream;
         if(securityProvider == null)
-            securityProvider = new BouncyCastleProvider();
+            securityProvider = BCProviderSingletone.getProvider();
         this.securityProvider = securityProvider;
     }
 

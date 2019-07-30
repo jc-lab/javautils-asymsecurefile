@@ -10,6 +10,7 @@ package kr.jclab.javautils.asymsecurefile.internal.jasf3;
 
 import kr.jclab.javautils.asymsecurefile.*;
 import kr.jclab.javautils.asymsecurefile.internal.AlgorithmInfo;
+import kr.jclab.javautils.asymsecurefile.internal.BCProviderSingletone;
 import kr.jclab.javautils.asymsecurefile.internal.InputStreamDelegate;
 import kr.jclab.javautils.asymsecurefile.internal.SignatureHeader;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
@@ -24,7 +25,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.security.*;
-import java.security.interfaces.*;
 import java.security.spec.X509EncodedKeySpec;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedDeque;
@@ -45,7 +45,7 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
         }
     }
 
-    private final BouncyCastleProvider workSecurityProvider = new BouncyCastleProvider();
+    private final BouncyCastleProvider workSecurityProvider = BCProviderSingletone.getProvider();
 
     /**
      * < 0x80 : Jasf Header
@@ -110,10 +110,7 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
             if(!this.readPrepared)
                 prepareReadData();
             while ((item = this.cipherDataQueue.poll()) != null) {
-                byte[] buf = this.dataCipher.update(item.getBuffer(), 0, item.getSize());
-                if(buf != null) {
-                    this.plainDataQueue.add(new DataChunkQueueItem(buf));
-                }
+                this.plainDataQueue.add(new DataChunkQueueItem(this.dataCipher.update(item.getBuffer(), 0, item.getSize())));
             }
         }
 

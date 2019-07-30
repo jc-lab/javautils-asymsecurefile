@@ -8,14 +8,14 @@
 
 package kr.jclab.javautils.asymsecurefile.internal.signedsecurefile;
 
+import kr.jclab.javautils.asymsecurefile.internal.BCProviderSingletone;
 import kr.jclab.javautils.asymsecurefile.internal.SignatureHeader;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
-
-import javax.validation.constraints.NotNull;
 
 import javax.crypto.*;
 import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
+import javax.validation.constraints.NotNull;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -25,7 +25,6 @@ import java.security.NoSuchAlgorithmException;
 import java.security.Provider;
 
 public final class SignedSecureFileInputStream extends InputStream {
-    private final Provider cipherProvider = new BouncyCastleProvider();
     private final String HMAC_SHA256_ALGORITHM = "HmacSHA256";
 
     private SignatureHeader signatureHeader = null;
@@ -48,7 +47,7 @@ public final class SignedSecureFileInputStream extends InputStream {
     public SignedSecureFileInputStream(@NotNull InputStream inputStream, @NotNull Key asymmetricKey, String secretKey, SignatureHeader signatureHeader) throws IOException, NoSuchAlgorithmException, InvalidKeyException, IntegrityException {
         Cipher dataCipher;
         SecretKey dataKey;
-        Header header = new Header(cipherProvider);
+        Header header = new Header(BCProviderSingletone.getProvider());
         header.readHeader(inputStream, asymmetricKey, signatureHeader);
         m_stream = inputStream;
 
