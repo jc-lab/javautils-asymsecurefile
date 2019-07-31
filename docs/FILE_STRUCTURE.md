@@ -64,11 +64,13 @@ File Fingerprint Chunk [LAST - 0] {
 	    Chunk Size : (2byte),
 	    Data
 	}]
-	
 	Chunk Type
 	- 0x01 : Fingerprint
 	- 0x02 : Signature (Sign Mode)
 	- 0x03 : Mac (PUBLIC_ENCRYPT Mode)
+	,
+    Footer Chunk Size (2byte),
+    Total File Size (8bytes)
 }
 ```
 
