@@ -6,7 +6,7 @@
 
     <groupId>kr.jclab.javautils</groupId>
     <artifactId>asymsecurefile</artifactId>
-    <version>1.0.22</version>
+    <version>1.0.24</version>
 
     <name>AsymSecureFile</name>
     <description></description>
@@ -135,6 +135,14 @@
             <artifactId>bcpkix-jdk15on</artifactId>
             <version>1.61</version>
         </dependency>
+
+        <!-- https://mvnrepository.com/artifact/org.apache.httpcomponents/httpclient -->
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpclient</artifactId>
+            <version>4.5.9</version>
+        </dependency>
+
 
         <!-- TEST dependency -->
         <!-- https://mvnrepository.com/artifact/kr.jclab.javautils/signedsecurefile -->

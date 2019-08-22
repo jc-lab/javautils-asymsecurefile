@@ -13,11 +13,20 @@ import kr.jclab.javautils.asymsecurefile.internal.AlgorithmInfo;
 import kr.jclab.javautils.asymsecurefile.internal.BCProviderSingletone;
 import kr.jclab.javautils.asymsecurefile.internal.OutputStreamDelegate;
 import kr.jclab.javautils.asymsecurefile.internal.SignatureHeader;
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpResponse;
+import org.apache.http.StatusLine;
+import org.apache.http.client.HttpClient;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.entity.ByteArrayEntity;
+import org.apache.http.entity.ContentType;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.bouncycastle.jcajce.provider.asymmetric.util.EC5Util;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jce.spec.ECParameterSpec;
 import org.bouncycastle.jce.spec.ECPublicKeySpec;
 import org.bouncycastle.math.ec.ECPoint;
+import org.bouncycastle.tsp.*;
 
 import javax.crypto.*;
 import javax.crypto.spec.GCMParameterSpec;
@@ -26,6 +35,7 @@ import javax.crypto.spec.SecretKeySpec;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.math.BigInteger;
 import java.security.*;
 import java.security.interfaces.ECKey;
 import java.security.interfaces.ECPrivateKey;
@@ -71,6 +81,8 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
     private transient MessageDigest fingerprintDigest = null;
 
     private ByteArrayOutputStream writingDataTempBuffer = null;
+
+    private String tsaLocation = null;
 
     public Jasf3OutputStreamDelegate(OperationType operationType, OutputStream outputStream, Provider securityProvider) {
         super(operationType, outputStream, securityProvider);
@@ -207,6 +219,10 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
         }
     }
 
+    public void enableTimestamping(String tsaLocation) {
+        this.tsaLocation = tsaLocation;
+    }
+
     @Override
     public void write(byte[] buffer, int off, int size) throws IOException {
         if(this.state == State.INITED) {
@@ -294,6 +310,7 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
 
     private void writeFooter() throws IOException {
         byte[] fingerprint = this.fingerprintDigest.digest();
+        byte[] tsdigest;
         FooterChunk.Builder footerChunkBuilder = FooterChunk.builder()
                 .withFingerprint(fingerprint)
                 .withTotalFileSizeWithoutFooter(this.getWrittenBytes());
@@ -306,9 +323,41 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
                 mac.update(fingerprint);
                 footerChunkBuilder.withMac(mac.doFinal());
             }
+
+            tsdigest = MessageDigest.getInstance("SHA-1").digest(fingerprint);
         } catch (Exception e) {
             throw new IOException(e);
         }
+
+
+        if(this.tsaLocation != null) {
+            TimeStampRequestGenerator requestGen = new TimeStampRequestGenerator();
+            requestGen.setCertReq(true);
+            TimeStampRequest request = requestGen.generate(TSPAlgorithms.SHA1, tsdigest, BigInteger.valueOf(this.random.nextLong()));
+            HttpPost postMethod = new HttpPost(this.tsaLocation);
+            HttpEntity requestEntity = new ByteArrayEntity(request.getEncoded(), ContentType.create("application/timestamp-query"));
+            postMethod.addHeader("User-Agent", "asymsecurefile client");
+            postMethod.setEntity(requestEntity);
+            HttpClient httpClient = HttpClientBuilder.create().build();
+            HttpResponse httpResponse = httpClient.execute(postMethod);
+            StatusLine statusLine = httpResponse.getStatusLine();
+            int statusCode = statusLine.getStatusCode();
+            if (statusCode != 200) {
+                throw new TimestampRequestException("status_code=" + statusCode);
+            }
+
+            try {
+                HttpEntity httpEntity = httpResponse.getEntity();
+                TimeStampResponse tspResponse = new TimeStampResponse(
+                        httpEntity.getContent());
+                postMethod.releaseConnection();
+                TimeStampToken timeStampToken = tspResponse.getTimeStampToken();
+                footerChunkBuilder.withTimestampToken(timeStampToken.getEncoded());
+            } catch (TSPException e) {
+                throw new TimestampRequestException(e);
+            }
+        }
+
         writeRawChunk(footerChunkBuilder.build());
         outputStream.flush();
     }

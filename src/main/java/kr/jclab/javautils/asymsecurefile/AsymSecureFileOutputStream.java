@@ -131,6 +131,14 @@ public class AsymSecureFileOutputStream extends OutputStream {
         checkAndInit(false);
     }
 
+    public void enableTimestamping(boolean enabled, String tsaLocation) {
+        if(enabled) {
+            this.delegate.enableTimestamping(tsaLocation);
+        }else{
+            this.delegate.enableTimestamping(null);
+        }
+    }
+
     @Override
     public void write(byte[] cbuf, int off, int len) throws IOException {
         checkAndInit(true);

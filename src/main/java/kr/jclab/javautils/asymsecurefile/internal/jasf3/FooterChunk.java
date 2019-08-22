@@ -31,6 +31,7 @@ public class FooterChunk extends Chunk {
     private final byte[] fingerprint;
     private final byte[] signature;
     private final byte[] mac;
+    private final byte[] timestampToken;
     private final short footerSize;
     private final long totalFileSize;
     private final long totalFileSizeWithoutFooter;
@@ -40,6 +41,7 @@ public class FooterChunk extends Chunk {
         byte[] fingerprint = null;
         byte[] signature = null;
         byte[] mac = null;
+        byte[] timestampToken = null;
 
         try {
             ByteBuffer byteBuffer = ByteBuffer.wrap(data, 0, dataSize).order(ByteOrder.LITTLE_ENDIAN);
@@ -61,12 +63,21 @@ public class FooterChunk extends Chunk {
                         case 0x03:
                             mac = new byte[size];
                             byteBuffer.get(mac, 0, size);
+                            break;
+                        case 0x04:
+                            timestampToken = new byte[size];
+                            byteBuffer.get(timestampToken, 0, size);
+                            break;
+                        default:
+                            while(size-- > 0)
+                                byteBuffer.get();
                     }
                 }
             } while (type > 0);
             this.fingerprint = fingerprint;
             this.signature = signature;
             this.mac = mac;
+            this.timestampToken = timestampToken;
             this.footerSize = byteBuffer.getShort();
             this.totalFileSize = byteBuffer.getLong();
             this.totalFileSizeWithoutFooter = dataSize;
@@ -75,11 +86,12 @@ public class FooterChunk extends Chunk {
         }
     }
 
-    public FooterChunk(byte[] fingerprint, byte[] signature, byte[] mac, short footerSize, long totalFileSize, long totalFileSizeWithoutFooter, byte[] data) {
+    public FooterChunk(byte[] fingerprint, byte[] signature, byte[] mac, byte[] timestampToken, short footerSize, long totalFileSize, long totalFileSizeWithoutFooter, byte[] data) {
         super(CHUNK_TYPE.value(), (short)0, (short)data.length, data);
         this.fingerprint = fingerprint;
         this.signature = signature;
         this.mac = mac;
+        this.timestampToken = timestampToken;
         this.footerSize = footerSize;
         this.totalFileSize = totalFileSize;
         this.totalFileSizeWithoutFooter = totalFileSizeWithoutFooter;
@@ -95,6 +107,10 @@ public class FooterChunk extends Chunk {
 
     public byte[] mac() {
         return this.mac;
+    }
+
+    public byte[] timestampToken() {
+        return this.timestampToken;
     }
 
     public short footerSize() {
@@ -113,6 +129,7 @@ public class FooterChunk extends Chunk {
         private byte[] fingerprint = null;
         private byte[] signature = null;
         private byte[] mac = null;
+        private byte[] timestampToken = null;
         private short footerSize = 0;
         private long totalFileSizeWithoutFooter = 0;
 
@@ -131,6 +148,11 @@ public class FooterChunk extends Chunk {
 
         public Builder withMac(byte[] mac) {
             this.mac = mac;
+            return this;
+        }
+
+        public Builder withTimestampToken(byte[] timestampToken) {
+            this.timestampToken = timestampToken;
             return this;
         }
 
@@ -155,6 +177,9 @@ public class FooterChunk extends Chunk {
             if(this.mac != null) {
                 needSize += 3 + this.mac.length;
             }
+            if(this.timestampToken != null) {
+                needSize += 3 + this.timestampToken.length;
+            }
 
             ByteBuffer byteBuffer = ByteBuffer.allocate(11 + needSize).order(ByteOrder.LITTLE_ENDIAN);
             long totalFileSize = this.totalFileSizeWithoutFooter + byteBuffer.capacity() + 3;
@@ -174,11 +199,16 @@ public class FooterChunk extends Chunk {
                 byteBuffer.putShort((short)this.mac.length);
                 byteBuffer.put(this.mac);
             }
+            if(this.timestampToken != null) {
+                byteBuffer.put((byte)0x04);
+                byteBuffer.putShort((short)this.timestampToken.length);
+                byteBuffer.put(this.timestampToken);
+            }
             byteBuffer.put((byte)0);
             byteBuffer.putShort(this.footerSize);
             byteBuffer.putLong(totalFileSize);
             byteBuffer.flip();
-            return new FooterChunk(fingerprint, signature, mac, footerSize, totalFileSize, totalFileSizeWithoutFooter, byteBuffer.array());
+            return new FooterChunk(fingerprint, signature, mac, timestampToken, footerSize, totalFileSize, totalFileSizeWithoutFooter, byteBuffer.array());
         }
     }
 }
