@@ -6,7 +6,7 @@
 
     <groupId>kr.jclab.javautils</groupId>
     <artifactId>asymsecurefile</artifactId>
-    <version>1.0.24</version>
+    <version>1.1.0</version>
 
     <name>AsymSecureFile</name>
     <description></description>
@@ -126,14 +126,14 @@
         <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcprov-jdk15on</artifactId>
-            <version>1.61</version>
+            <version>1.65.01</version>
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/org.bouncycastle/bcpkix-jdk15on -->
         <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcpkix-jdk15on</artifactId>
-            <version>1.61</version>
+            <version>1.65</version>
         </dependency>
 
         <!-- https://mvnrepository.com/artifact/org.apache.httpcomponents/httpclient -->
@@ -143,16 +143,39 @@
             <version>4.5.9</version>
         </dependency>
 
+        <dependency>
+            <groupId>kr.jclab.javautils</groupId>
+            <artifactId>asn1-stream-reader</artifactId>
+            <version>0.0.7</version>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/org.reflections/reflections -->
+        <dependency>
+            <groupId>org.reflections</groupId>
+            <artifactId>reflections</artifactId>
+            <version>0.9.12</version>
+        </dependency>
+
+
 
         <!-- TEST dependency -->
         <!-- https://mvnrepository.com/artifact/kr.jclab.javautils/signedsecurefile -->
+<!--        <dependency>-->
+<!--            <groupId>kr.jclab.javautils</groupId>-->
+<!--            <artifactId>signedsecurefile</artifactId>-->
+<!--            <version>1.1.10</version>-->
+<!--            <scope>test</scope>-->
+<!--        </dependency>-->
+        <!-- TEST dependency -->
+
+        <!-- https://mvnrepository.com/artifact/junit/junit -->
         <dependency>
-            <groupId>kr.jclab.javautils</groupId>
-            <artifactId>signedsecurefile</artifactId>
-            <version>1.1.10</version>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.13</version>
             <scope>test</scope>
         </dependency>
-        <!-- TEST dependency -->
+
     </dependencies>
 
 </project>
