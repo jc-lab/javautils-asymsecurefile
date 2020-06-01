@@ -31,7 +31,7 @@ public class AlgorithmInfo {
     private final AlgorithmIdentifier algorithmIdentifier;
 
     public AlgorithmInfo(AsymmetricKeyObject keyObject, Key key) throws NotSupportAlgorithmException {
-        int keySize = 0;
+        int keySize = keyObject.getKeySize();
         AsymAlgorithmOld algorithm = null;
         this.algorithmIdentifier = keyObject.getAlgorithmIdentifier();
         if(
@@ -44,16 +44,6 @@ public class AlgorithmInfo {
         }else if(AsymmetricAlgorithmType.rsa.equals(keyObject.getAlgorithmType())) {
             algorithm = AsymAlgorithmOld.RSA;
         }
-
-        switch (algorithm) {
-            case EC:
-                keySize = ((ECKey)key).getParams().getCurve().getField().getFieldSize();
-                break;
-            case RSA:
-                keySize = ((RSAKey)key).getModulus().bitLength();
-                break;
-        }
-
         this.algorithmOld = algorithm;
         this.oid = keyObject.getAlgorithmIdentifier().getAlgorithm();
         this.keySize = keySize;
