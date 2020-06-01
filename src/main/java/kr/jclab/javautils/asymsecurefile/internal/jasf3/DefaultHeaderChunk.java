@@ -8,7 +8,7 @@
 
 package kr.jclab.javautils.asymsecurefile.internal.jasf3;
 
-import kr.jclab.javautils.asymsecurefile.Chunk;
+import kr.jclab.javautils.asymsecurefile.internal.deprecated.Chunk;
 import kr.jclab.javautils.asymsecurefile.InvalidFileException;
 import kr.jclab.javautils.asymsecurefile.OperationType;
 
@@ -30,7 +30,7 @@ public class DefaultHeaderChunk extends Chunk {
         super(CHUNK_TYPE.value(), (short)0, dataSize, data);
         OperationType operationType = null;
         if(dataSize < 16) {
-            throw new InvalidFileException("Invalid DefaultHeader");
+            throw new InvalidFileException("Invalid ASN1DefaultHeaderObject");
         }
         for(OperationType item : OperationType.values()) {
             if(item.value() == data[0]) {
@@ -40,7 +40,7 @@ public class DefaultHeaderChunk extends Chunk {
         this.operationType = operationType;
         System.arraycopy(data, 0, seed, 0, 16);
         if(operationType == null) {
-            throw new InvalidFileException("Invalid DefaultHeader");
+            throw new InvalidFileException("Invalid ASN1DefaultHeaderObject");
         }
     }
 

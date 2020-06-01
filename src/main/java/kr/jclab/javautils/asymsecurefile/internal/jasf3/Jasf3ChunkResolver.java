@@ -1,6 +1,6 @@
 package kr.jclab.javautils.asymsecurefile.internal.jasf3;
 
-import kr.jclab.javautils.asymsecurefile.Chunk;
+import kr.jclab.javautils.asymsecurefile.internal.deprecated.Chunk;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;

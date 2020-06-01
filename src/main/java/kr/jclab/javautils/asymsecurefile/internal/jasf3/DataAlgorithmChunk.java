@@ -8,7 +8,7 @@
 
 package kr.jclab.javautils.asymsecurefile.internal.jasf3;
 
-import kr.jclab.javautils.asymsecurefile.Chunk;
+import kr.jclab.javautils.asymsecurefile.internal.deprecated.Chunk;
 import kr.jclab.javautils.asymsecurefile.DataAlgorithm;
 import kr.jclab.javautils.asymsecurefile.InvalidFileException;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;

@@ -10,6 +10,7 @@ package kr.jclab.javautils.asymsecurefile;
 
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.nist.NISTObjectIdentifiers;
+import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 
 public enum DataAlgorithm {
     AES256_GCM(NISTObjectIdentifiers.id_aes256_GCM, "AES/GCM/NOPADDING", 32, true);

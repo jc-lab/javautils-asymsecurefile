@@ -8,8 +8,8 @@
 
 package kr.jclab.javautils.asymsecurefile.internal.jasf3;
 
-import kr.jclab.javautils.asymsecurefile.AsymAlgorithm;
-import kr.jclab.javautils.asymsecurefile.Chunk;
+import kr.jclab.javautils.asymsecurefile.AsymAlgorithmOld;
+import kr.jclab.javautils.asymsecurefile.internal.deprecated.Chunk;
 import kr.jclab.javautils.asymsecurefile.InvalidFileException;
 import kr.jclab.javautils.asymsecurefile.internal.AlgorithmInfo;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
@@ -52,7 +52,7 @@ public class AsymAlgorithmChunk extends Chunk {
             int keySize = buffer.getInt();
             byte[] asn1Oid = new byte[buffer.remaining()];
             buffer.get(asn1Oid);
-            for (AsymAlgorithm item : AsymAlgorithm.values()) {
+            for (AsymAlgorithmOld item : AsymAlgorithmOld.values()) {
                 if (item.getKeyType() == keyType) {
                     try {
                         ASN1Primitive primitive = ASN1ObjectIdentifier.fromByteArray(asn1Oid);
@@ -93,7 +93,7 @@ public class AsymAlgorithmChunk extends Chunk {
         public Chunk build() throws IOException {
             byte[] asn1Oid = algorithmInfo.getOid().getEncoded();
             ByteBuffer buffer = ByteBuffer.allocate(5 + asn1Oid.length).order(ByteOrder.LITTLE_ENDIAN);
-            buffer.put(this.algorithmInfo.getAlgorithm().getKeyType());
+            buffer.put(this.algorithmInfo.getAlgorithmOld().getKeyType());
             buffer.putInt(this.algorithmInfo.getKeySize());
             buffer.put(asn1Oid);
             buffer.flip();

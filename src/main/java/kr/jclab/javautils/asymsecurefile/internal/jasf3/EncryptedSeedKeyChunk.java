@@ -8,7 +8,7 @@
 
 package kr.jclab.javautils.asymsecurefile.internal.jasf3;
 
-import kr.jclab.javautils.asymsecurefile.Chunk;
+import kr.jclab.javautils.asymsecurefile.internal.deprecated.Chunk;
 
 public class EncryptedSeedKeyChunk extends Chunk {
     public static final Jasf3ChunkType CHUNK_TYPE = Jasf3ChunkType.ENCRYPTED_SEED_KEY;

@@ -13,7 +13,7 @@ import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
 import org.bouncycastle.asn1.sec.SECObjectIdentifiers;
 import org.bouncycastle.asn1.x9.X9ObjectIdentifiers;
 
-public enum AsymAlgorithm {
+public enum AsymAlgorithmOld {
     EC((byte)0x11, SECObjectIdentifiers.ellipticCurve, "EC", "NONEWithECDSA"),
     PRIME((byte)0x12, X9ObjectIdentifiers.primeCurve, "EC", "NONEWithECDSA"),
     RSA((byte)0x20, PKCSObjectIdentifiers.rsaEncryption, "RSA", "NONEWithRSA");
@@ -22,7 +22,7 @@ public enum AsymAlgorithm {
     private final ASN1ObjectIdentifier identifier;
     private final String algorithm;
     private final String signatureAlgorithm;
-    AsymAlgorithm(byte keyType, ASN1ObjectIdentifier identifier, String algorithm, String signatureAlgorithm) {
+    AsymAlgorithmOld(byte keyType, ASN1ObjectIdentifier identifier, String algorithm, String signatureAlgorithm) {
         this.keyType = keyType;
         this.identifier = identifier;
         this.algorithm = algorithm;

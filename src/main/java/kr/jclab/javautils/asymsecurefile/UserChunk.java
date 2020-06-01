@@ -8,25 +8,49 @@
 
 package kr.jclab.javautils.asymsecurefile;
 
-public class UserChunk extends Chunk {
-    protected UserChunk(byte flag, short userCode, short dataSize, byte[] data) {
-        super((byte)(0x80 | flag), userCode, dataSize, data);
-    }
+public class UserChunk {
+    public enum Flag {
+        EncryptWithAuthKey(0x0001);
 
-    public Flag getFlag() {
-        if((this.primaryType & 0x80) != 0) {
-            byte value = (byte)(this.primaryType & 0x7F);
-            for(Flag flag : Flag.values()) {
-                if(flag.value() == value) {
-                    return flag;
-                }
-            }
+        private final int value;
+        Flag(int value) {
+            this.value = value;
         }
-        return null;
+        int value() {
+            return this.value;
+        }
     }
 
-    public short getUserCode() {
+    private final int flag;
+    private final int userCode;
+    private final int dataSize;
+    private final byte[] data;
+
+    public UserChunk(int flag, int userCode, int dataSize, byte[] data) {
+        this.flag = flag;
+        this.userCode = userCode;
+        this.dataSize = dataSize;
+        this.data = data;
+    }
+
+    public int getFlag() {
+        return flag;
+    }
+
+    public int getUserCode() {
         return userCode;
+    }
+
+    public int getDataSize() {
+        return dataSize;
+    }
+
+    public byte[] getData() {
+        return data;
+    }
+
+    public boolean hasFlag(Flag flag) {
+        return (this.flag & flag.value()) != 0;
     }
 
     public static final Builder builder() {
@@ -34,9 +58,9 @@ public class UserChunk extends Chunk {
     }
 
     public static final class Builder {
-        protected Flag flag;
-        protected short userCode;
-        protected short dataSize = 0;
+        protected int flag = 0;
+        protected int userCode = 0;
+        protected int dataSize = 0;
         protected byte[] data;
 
         private Builder() {
@@ -47,22 +71,16 @@ public class UserChunk extends Chunk {
         }
 
         public Builder withFlag(Flag flag) {
-            switch (flag) {
-                case EncryptedWithCustomKey:
-                    throw new IllegalArgumentException("Not support yet");
-                case SignedSignature:
-                    throw new IllegalArgumentException("Not support yet");
-            }
-            this.flag = flag;
+            this.flag |= flag.value();
             return this;
         }
 
-        public Builder withUserCode(short userCode) {
+        public Builder withUserCode(int userCode) {
             this.userCode = userCode;
             return this;
         }
 
-        public Builder withDataSize(short dataSize) {
+        public Builder withDataSize(int dataSize) {
             this.dataSize = dataSize;
             return this;
         }
@@ -72,10 +90,14 @@ public class UserChunk extends Chunk {
             return this;
         }
 
+        public Builder encryptWithAuthKey() {
+            return this.withFlag(Flag.EncryptWithAuthKey);
+        }
+
         public UserChunk build() {
             if(dataSize <= 0 && data != null)
                 dataSize = (short)data.length;
-            return new UserChunk(flag.value(), userCode, dataSize, data);
+            return new UserChunk(flag, userCode, dataSize, data);
         }
     }
 }

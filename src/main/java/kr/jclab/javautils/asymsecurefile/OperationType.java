@@ -19,4 +19,12 @@ public enum OperationType {
     public byte value() {
         return value;
     }
+
+    public static OperationType valueOf(int value) {
+        for(OperationType item : values()) {
+            if(item.value == value)
+                return item;
+        }
+        return null;
+    }
 }

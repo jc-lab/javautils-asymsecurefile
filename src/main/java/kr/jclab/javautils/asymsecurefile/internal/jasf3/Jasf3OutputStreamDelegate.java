@@ -9,18 +9,9 @@
 package kr.jclab.javautils.asymsecurefile.internal.jasf3;
 
 import kr.jclab.javautils.asymsecurefile.*;
-import kr.jclab.javautils.asymsecurefile.internal.AlgorithmInfo;
-import kr.jclab.javautils.asymsecurefile.internal.BCProviderSingletone;
-import kr.jclab.javautils.asymsecurefile.internal.OutputStreamDelegate;
-import kr.jclab.javautils.asymsecurefile.internal.SignatureHeader;
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpResponse;
-import org.apache.http.StatusLine;
-import org.apache.http.client.HttpClient;
-import org.apache.http.client.methods.HttpPost;
-import org.apache.http.entity.ByteArrayEntity;
-import org.apache.http.entity.ContentType;
-import org.apache.http.impl.client.HttpClientBuilder;
+import kr.jclab.javautils.asymsecurefile.internal.*;
+import kr.jclab.javautils.asymsecurefile.internal.deprecated.Chunk;
+import kr.jclab.javautils.asymsecurefile.internal.utils.TimestampingUtils;
 import org.bouncycastle.jcajce.provider.asymmetric.util.EC5Util;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jce.spec.ECParameterSpec;
@@ -34,7 +25,6 @@ import javax.crypto.spec.IvParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.OutputStream;
 import java.math.BigInteger;
 import java.security.*;
 import java.security.interfaces.ECKey;
@@ -67,7 +57,7 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
 
     /**
      * < 0x80 : Jasf Header
-     * 0x80 0000 ~ 0x80 FFFF : User Chunk
+     * 0x80 0000 ~ 0x80 FFFF : User ASN1ChunkObject
      */
     private final Map<Integer, Chunk> rawChunkMap = new HashMap<>();
 
@@ -82,23 +72,21 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
 
     private ByteArrayOutputStream writingDataTempBuffer = null;
 
-    private String tsaLocation = null;
-
-    public Jasf3OutputStreamDelegate(OperationType operationType, OutputStream outputStream, Provider securityProvider) {
-        super(operationType, outputStream, securityProvider);
+    public Jasf3OutputStreamDelegate(OutputStreamOptions options) {
+        super(options);
         this.defaultHeaderChunk = DefaultHeaderChunk.builder().withOperationType(operationType).build(this.random);
     }
 
     @Override
-    public void init(Key key, AsymAlgorithm asymAlgorithm, DataAlgorithm dataAlgorithm, byte[] authKey, PrivateKey localPrivateKey) throws IOException {
+    public void init() throws IOException {
         if(state != State.INIT)
             return ;
 
-        this.algorithmInfo = new AlgorithmInfo(key, asymAlgorithm);
-        if(this.algorithmInfo.getAlgorithm() == null) {
+        this.algorithmInfo = new AlgorithmInfo(this.options.getAsymKey().getKey(), this.options.getAsymAlgorithm());
+        if(this.algorithmInfo.getAlgorithmOld() == null) {
             throw new NotSupportAlgorithmException();
         }
-        this.asymKey = key;
+        this.asymKey = this.options.getAsymKey().getKey();
         this.localPrivateKey = localPrivateKey;
         this.authKey = authKey;
         this.dataAlgorithm = dataAlgorithm;
@@ -113,7 +101,7 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
             EncryptedSeedKeyChunk.Builder encryptedSeedKeyChunkBuilder = EncryptedSeedKeyChunk.builder();
             this.random.nextBytes(dataIV);
 
-            // AuthEncKey = HmacSHA256(authKey, DefaultHeader.seed)
+            // AuthEncKey = HmacSHA256(authKey, ASN1DefaultHeaderObject.seed)
             Mac authEncKeyMac = Mac.getInstance("HmacSHA256");
             authEncKeyMac.init(new SecretKeySpec(this.authKey, authEncKeyMac.getAlgorithm()));
             this.authEncKey = authEncKeyMac.doFinal(this.defaultHeaderChunk.seed());
@@ -127,13 +115,13 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
                 Mac dataKeyMac = Mac.getInstance("HmacSHA512", this.workSecurityProvider);
                 dataKeyMac.init(new SecretKeySpec(this.authKey, dataKeyMac.getAlgorithm()));
 
-                if ((this.algorithmInfo.getAlgorithm() == AsymAlgorithm.EC) || (this.algorithmInfo.getAlgorithm() == AsymAlgorithm.PRIME)) {
+                if ((this.algorithmInfo.getAlgorithmOld() == AsymAlgorithmOld.EC) || (this.algorithmInfo.getAlgorithmOld() == AsymAlgorithmOld.PRIME)) {
                     // Like ECIES
                     KeyPair localKeyPair;
                     if(this.localPrivateKey != null) {
                         ECPrivateKey ecLocalPrivateKey = (ECPrivateKey)this.localPrivateKey;
                         KeyFactory keyFactory = KeyFactory.getInstance("ECDH", this.securityProvider);
-                        ECParameterSpec ecSpec = EC5Util.convertSpec(ecLocalPrivateKey.getParams(), false);
+                        ECParameterSpec ecSpec = EC5Util.convertSpec(ecLocalPrivateKey.getParams());
                         ECPoint Q = ecSpec.getG().multiply(ecLocalPrivateKey.getS());
                         byte[] publicDerBytes = Q.getEncoded(false);
                         ECPoint point = ecSpec.getCurve().decodePoint(publicDerBytes);
@@ -141,7 +129,7 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
                         ECPublicKey publicKeyGenerated = (ECPublicKey) keyFactory.generatePublic(pubSpec);
                         localKeyPair = new KeyPair(publicKeyGenerated, this.localPrivateKey);
                     }else{
-                        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance(this.algorithmInfo.getAlgorithm().getAlgorithm());
+                        KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance(this.algorithmInfo.getAlgorithmOld().getAlgorithm());
                         keyPairGenerator.initialize(((ECKey)this.asymKey).getParams());
                         localKeyPair = keyPairGenerator.generateKeyPair();
                     }
@@ -150,7 +138,7 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
                     keyAgreement.doPhase(this.asymKey, true);
                     encryptedSeedKeyChunkBuilder.withData(localKeyPair.getPublic().getEncoded());
                     seedKey = keyAgreement.generateSecret();
-                } else if (this.algorithmInfo.getAlgorithm() == AsymAlgorithm.RSA) {
+                } else if (this.algorithmInfo.getAlgorithmOld() == AsymAlgorithmOld.RSA) {
                     Cipher seedKeyCipher = Cipher.getInstance("RSA/ECB/OAEPPadding", this.securityProvider);
                     seedKey = new byte[32];
                     this.random.nextBytes(seedKey);
@@ -201,7 +189,7 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
         if(this.state != State.INITED) {
             throw new IllegalStateException();
         }
-        if(chunk.getFlag() == Chunk.Flag.EncryptedWithAuthEncKey) {
+        if(chunk.hasFlag(UserChunk.Flag.EncryptWithAuthKey)) {
             byte[] dataIV = new byte[16];
             this.random.nextBytes(dataIV);
             try {
@@ -210,17 +198,13 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
                 byte[] buffer = new byte[16 + ciphertext.length];
                 System.arraycopy(dataIV, 0, buffer, 0, dataIV.length);
                 System.arraycopy(ciphertext, 0, buffer, dataIV.length, ciphertext.length);
-                this.rawChunkMap.put(0x800000 | chunk.getUserCode(), new RawChunk((byte)(0x80 | chunk.getFlag().value()), chunk.getUserCode(),  (short)buffer.length, buffer));
+                this.rawChunkMap.put(0x800000 | chunk.getUserCode(), new RawChunk((byte)(0x80 | 0x04), (short)chunk.getUserCode(),  (short)buffer.length, buffer));
             } catch (NoSuchPaddingException | NoSuchAlgorithmException | InvalidAlgorithmParameterException | InvalidKeyException | IllegalBlockSizeException | BadPaddingException e) {
                 throw new IOException(e);
             }
         }else{
-            this.rawChunkMap.put(chunk.getChunkId(), chunk);
+            this.rawChunkMap.put(0x800000 | chunk.getUserCode(), new RawChunk((byte)0x80, (short)chunk.getUserCode(),  (short)chunk.getDataSize(), chunk.getData()));
         }
-    }
-
-    public void enableTimestamping(String tsaLocation) {
-        this.tsaLocation = tsaLocation;
     }
 
     @Override
@@ -330,32 +314,15 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
         }
 
 
-        if(this.tsaLocation != null) {
-            TimeStampRequestGenerator requestGen = new TimeStampRequestGenerator();
-            requestGen.setCertReq(true);
-            TimeStampRequest request = requestGen.generate(TSPAlgorithms.SHA1, tsdigest, BigInteger.valueOf(this.random.nextLong()));
-            HttpPost postMethod = new HttpPost(this.tsaLocation);
-            HttpEntity requestEntity = new ByteArrayEntity(request.getEncoded(), ContentType.create("application/timestamp-query"));
-            postMethod.addHeader("User-Agent", "asymsecurefile client");
-            postMethod.setEntity(requestEntity);
-            HttpClient httpClient = HttpClientBuilder.create().build();
-            HttpResponse httpResponse = httpClient.execute(postMethod);
-            StatusLine statusLine = httpResponse.getStatusLine();
-            int statusCode = statusLine.getStatusCode();
-            if (statusCode != 200) {
-                throw new TimestampRequestException("status_code=" + statusCode);
-            }
-
-            try {
-                HttpEntity httpEntity = httpResponse.getEntity();
-                TimeStampResponse tspResponse = new TimeStampResponse(
-                        httpEntity.getContent());
-                postMethod.releaseConnection();
-                TimeStampToken timeStampToken = tspResponse.getTimeStampToken();
-                footerChunkBuilder.withTimestampToken(timeStampToken.getEncoded());
-            } catch (TSPException e) {
-                throw new TimestampRequestException(e);
-            }
+        if (this.options.isEnabledTimestamping()) {
+            TimeStampToken timeStampToken = TimestampingUtils.sign(
+                    (SecureRandom) this.random,
+                    TSPAlgorithms.SHA1,
+                    tsdigest,
+                    this.options.getTsaLocation(),
+                    this.options.getTimestampingTimeout()
+            );
+            footerChunkBuilder.withTimestampToken(timeStampToken.getEncoded());
         }
 
         writeRawChunk(footerChunkBuilder.build());
@@ -364,7 +331,7 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
 
     private byte[] signData(byte[] data) throws InvalidKeyException, SignatureException, NoSuchAlgorithmException {
         // Sign
-        Signature signature = Signature.getInstance(this.algorithmInfo.getAlgorithm().getSignatureAlgorithm(), this.securityProvider);
+        Signature signature = Signature.getInstance(this.algorithmInfo.getAlgorithmOld().getSignatureAlgorithm(), this.securityProvider);
         signature.initSign((PrivateKey) this.asymKey);
         signature.update(data);
         return signature.sign();

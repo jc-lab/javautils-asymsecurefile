@@ -12,6 +12,8 @@ import kr.jclab.javautils.asymsecurefile.UserChunk;
 import kr.jclab.javautils.asymsecurefile.ValidateFailedException;
 import kr.jclab.javautils.asymsecurefile.internal.InputStreamDelegate;
 import kr.jclab.javautils.asymsecurefile.internal.SignatureHeader;
+import org.bouncycastle.tsp.TSPException;
+import org.bouncycastle.tsp.TimeStampToken;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -106,5 +108,10 @@ public class SignedSecureFileInputStreamDelegate extends InputStreamDelegate {
         if(this.realInputStream == null) {
             throw new ValidateFailedException("");
         }
+    }
+
+    @Override
+    public TimeStampToken getTimestampToken() throws IOException, TSPException {
+        throw new IOException("Not support yet");
     }
 }

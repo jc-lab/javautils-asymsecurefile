@@ -9,11 +9,11 @@
 package kr.jclab.javautils.asymsecurefile.internal.jasf3;
 
 import kr.jclab.javautils.asymsecurefile.*;
-import kr.jclab.javautils.asymsecurefile.internal.AlgorithmInfo;
-import kr.jclab.javautils.asymsecurefile.internal.BCProviderSingletone;
-import kr.jclab.javautils.asymsecurefile.internal.InputStreamDelegate;
-import kr.jclab.javautils.asymsecurefile.internal.SignatureHeader;
+import kr.jclab.javautils.asymsecurefile.internal.*;
+import kr.jclab.javautils.asymsecurefile.internal.deprecated.Chunk;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import org.bouncycastle.tsp.TSPException;
+import org.bouncycastle.tsp.TimeStampToken;
 
 import javax.crypto.*;
 import javax.crypto.spec.GCMParameterSpec;
@@ -49,7 +49,7 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
 
     /**
      * < 0x80 : Jasf Header
-     * 0x80 0000 ~ 0x80 FFFF : User Chunk
+     * 0x80 0000 ~ 0x80 FFFF : User ASN1ChunkObject
      */
     private final Map<Integer, Chunk> rawChunkMap = new HashMap<>();
 
@@ -233,9 +233,9 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
                     } catch (NoSuchPaddingException | NoSuchAlgorithmException | InvalidAlgorithmParameterException | InvalidKeyException | IllegalBlockSizeException | BadPaddingException e) {
                         throw new IOException(e);
                     }
-                    userChunkMap.put((short) (entry.getKey() & 0xFFFF), new RawUserChunk(rawUserChunk.getPrimaryType(), rawUserChunk.getUserCode(), (short)plaintext.length, plaintext));
+                    userChunkMap.put((short) (entry.getKey() & 0xFFFF), new UserChunk(rawUserChunk.getPrimaryType(), rawUserChunk.getUserCode(), (short)plaintext.length, plaintext));
                 }else{
-                    userChunkMap.put((short) (entry.getKey() & 0xFFFF), new RawUserChunk(rawUserChunk));
+                    userChunkMap.put((short) (entry.getKey() & 0xFFFF), new UserChunk(rawUserChunk.getPrimaryType(), rawUserChunk.getUserCode(), rawUserChunk.getDataSize(), rawUserChunk.getData()));
                 }
             }
         }
@@ -278,7 +278,7 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
         }
         Chunk chunk = getChunk(chunkType);
         if(chunk == null && required)
-            throw new IOException("Chunk '" + clazz.getSimpleName() + "' empty");
+            throw new IOException("ASN1ChunkObject '" + clazz.getSimpleName() + "' empty");
         return (T)chunk;
     }
 
@@ -335,15 +335,15 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
                 Mac dataKeyMac = Mac.getInstance("HmacSHA512", this.workSecurityProvider);
                 dataKeyMac.init(new SecretKeySpec(this.authKey, dataKeyMac.getAlgorithm()));
 
-                if ((this.algorithmInfo.getAlgorithm() == AsymAlgorithm.EC) || (this.algorithmInfo.getAlgorithm() == AsymAlgorithm.PRIME)) {
+                if ((this.algorithmInfo.getAlgorithmOld() == AsymAlgorithmOld.EC) || (this.algorithmInfo.getAlgorithmOld() == AsymAlgorithmOld.PRIME)) {
                     KeyAgreement keyAgreement = KeyAgreement.getInstance("ECDH", this.securityProvider);
-                    KeyFactory keyFactory = KeyFactory.getInstance(this.algorithmInfo.getAlgorithm().getAlgorithm(), this.workSecurityProvider);
+                    KeyFactory keyFactory = KeyFactory.getInstance(this.algorithmInfo.getAlgorithmOld().getAlgorithm(), this.workSecurityProvider);
                     X509EncodedKeySpec localKeySpec = new X509EncodedKeySpec(encryptedSeedKeyChunk.data());
                     this.localPublicKey = keyFactory.generatePublic(localKeySpec);
                     keyAgreement.init(this.asymKey);
                     keyAgreement.doPhase(this.localPublicKey, true);
                     seedKey = keyAgreement.generateSecret();
-                } else if (this.algorithmInfo.getAlgorithm() == AsymAlgorithm.RSA) {
+                } else if (this.algorithmInfo.getAlgorithmOld() == AsymAlgorithmOld.RSA) {
                     Cipher seedKeyCipher = Cipher.getInstance("RSA/ECB/OAEPPadding", this.securityProvider);
                     seedKeyCipher.init(Cipher.DECRYPT_MODE, this.asymKey);
                     seedKey = seedKeyCipher.doFinal(encryptedSeedKeyChunk.data());
@@ -421,7 +421,7 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
 
     private void verifySignData(byte[] sig, byte[] data) throws InvalidKeyException, NoSuchAlgorithmException, NoSuchPaddingException, BadPaddingException, IllegalBlockSizeException, ValidateFailedException, SignatureException {
         // Sign
-        Signature signature = Signature.getInstance(this.algorithmInfo.getAlgorithm().getSignatureAlgorithm(), this.securityProvider);
+        Signature signature = Signature.getInstance(this.algorithmInfo.getAlgorithmOld().getSignatureAlgorithm(), this.securityProvider);
         signature.initVerify((PublicKey) this.asymKey);
         signature.update(data);
         if (!signature.verify(sig))
@@ -545,39 +545,8 @@ public class Jasf3InputStreamDelegate extends InputStreamDelegate {
         }
     }
 
-    private final class DataChunkQueueItem {
-        private final byte[] buffer;
-        private int readPosition = 0;
-        private int size = 0;
-
-        public DataChunkQueueItem(byte[] buffer, int size) {
-            this.size = size;
-            this.buffer = buffer;
-        }
-
-        public DataChunkQueueItem(byte[] buffer) {
-            this.size = buffer.length;
-            this.buffer = buffer;
-        }
-
-        public byte[] getBuffer() {
-            return this.buffer;
-        }
-
-        public int readPosition() {
-            return this.readPosition;
-        }
-
-        public int readRemaining() {
-            return this.size - this.readPosition;
-        }
-
-        public void incReadPosition(int size) {
-            this.readPosition += size;
-        }
-
-        public int getSize() {
-            return this.size;
-        }
+    @Override
+    public TimeStampToken getTimestampToken() throws IOException, TSPException {
+        throw new IOException("Not support yet");
     }
 }

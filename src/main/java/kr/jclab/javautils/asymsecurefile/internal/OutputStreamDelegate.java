@@ -8,28 +8,26 @@
 
 package kr.jclab.javautils.asymsecurefile.internal;
 
-import kr.jclab.javautils.asymsecurefile.AsymAlgorithm;
-import kr.jclab.javautils.asymsecurefile.DataAlgorithm;
 import kr.jclab.javautils.asymsecurefile.OperationType;
 import kr.jclab.javautils.asymsecurefile.UserChunk;
 
 import java.io.IOException;
 import java.io.OutputStream;
-import java.security.Key;
-import java.security.PrivateKey;
 import java.security.Provider;
 
 public abstract class OutputStreamDelegate {
+    protected OutputStreamOptions options;
     protected final OperationType operationType;
     private final OutputStream realOutputStream;
     protected final OutputStream outputStream;
     protected final Provider securityProvider;
     private long writtenBytes = 0;
 
-    public OutputStreamDelegate(OperationType operationType, OutputStream outputStream, Provider securityProvider) {
-        this.operationType = operationType;
-        this.realOutputStream = outputStream;
-        this.securityProvider = securityProvider;
+    public OutputStreamDelegate(OutputStreamOptions options) {
+        this.options = options;
+        this.operationType = options.getOperationType();
+        this.securityProvider = options.getSecurityProvider();
+        this.realOutputStream = options.getOutputStream();
         this.outputStream = new OutputStream() {
             public long getWrittenBytes() {
                 return writtenBytes;
@@ -70,11 +68,9 @@ public abstract class OutputStreamDelegate {
         return this.operationType;
     }
 
-    public abstract void init(Key key, AsymAlgorithm asymAlgorithm, DataAlgorithm dataAlgorithm, byte[] authKey, PrivateKey localPrivateKey) throws IOException;
+    public abstract void init() throws IOException;
 
     public abstract void write(byte[] buffer, int off, int size) throws IOException;
     public abstract void finish() throws IOException;
     public abstract void setUserChunk(UserChunk chunk) throws IOException;
-
-    public abstract void enableTimestamping(String tsaLocation);
 }

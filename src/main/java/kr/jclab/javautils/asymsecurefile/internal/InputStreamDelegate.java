@@ -9,6 +9,8 @@
 package kr.jclab.javautils.asymsecurefile.internal;
 
 import kr.jclab.javautils.asymsecurefile.UserChunk;
+import org.bouncycastle.tsp.TSPException;
+import org.bouncycastle.tsp.TimeStampToken;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -32,6 +34,14 @@ public abstract class InputStreamDelegate {
     public abstract void setAsymKey(KeyPair keyPair);
     public abstract void setAuthKey(byte[] authKey) throws IOException;
 
+    /**
+     * headerRead
+     *
+     * @return
+     *  1: continous
+     *  0: done
+     * @throws IOException error
+     */
     public abstract int headerRead() throws IOException;
     public abstract int available() throws IOException;
     public abstract int read(byte[] buffer, int offset, int size) throws IOException;
@@ -40,4 +50,5 @@ public abstract class InputStreamDelegate {
     public abstract boolean isDataReadable();
 
     public abstract void validate() throws IOException;
+    public abstract TimeStampToken getTimestampToken() throws IOException, TSPException;
 }

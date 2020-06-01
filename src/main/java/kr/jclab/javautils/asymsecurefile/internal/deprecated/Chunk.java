@@ -6,7 +6,7 @@
  *  of the Apache License 2.0.  See the LICENSE file for details.
  */
 
-package kr.jclab.javautils.asymsecurefile;
+package kr.jclab.javautils.asymsecurefile.internal.deprecated;
 
 public abstract class Chunk {
     public enum Flag {

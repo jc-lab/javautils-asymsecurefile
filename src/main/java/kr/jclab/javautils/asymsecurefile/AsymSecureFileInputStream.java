@@ -18,6 +18,7 @@ import javax.validation.constraints.NotNull;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.InvocationTargetException;
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.security.KeyPair;
 import java.security.Provider;
@@ -79,6 +80,16 @@ public class AsymSecureFileInputStream extends InputStream {
     @SuppressWarnings("unused")
     public void setAuthKey(@NotNull byte[] authKey) throws IOException {
         this.delegate.setAuthKey(authKey);
+    }
+
+    /**
+     * Set authKey
+     *
+     * @param authKey authKey
+     */
+    @SuppressWarnings("unused")
+    public void setAuthKey(@NotNull String authKey) throws IOException {
+        this.delegate.setAuthKey(authKey.getBytes(StandardCharsets.UTF_8));
     }
 
     /**

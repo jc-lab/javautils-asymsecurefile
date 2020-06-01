@@ -10,41 +10,57 @@ package kr.jclab.javautils.asymsecurefile;
 
 import kr.jclab.javautils.asymsecurefile.internal.BCProviderSingletone;
 import kr.jclab.javautils.asymsecurefile.internal.OutputStreamDelegate;
+import kr.jclab.javautils.asymsecurefile.internal.OutputStreamOptions;
 import kr.jclab.javautils.asymsecurefile.internal.VersionRouter;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import javax.validation.constraints.NotNull;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.lang.reflect.InvocationTargetException;
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.Provider;
 
 public class AsymSecureFileOutputStream extends OutputStream {
-    private final OutputStream outputStream;
+    private final OutputStreamOptions options;
     private final OutputStreamDelegate delegate;
 
     private boolean inited = false;
     private boolean finished = false;
 
-    private transient Key asymKey = null;
-    private transient PrivateKey localPrivateKey = null;
-    private AsymAlgorithm asymAlgorithm = null;
-    private byte[] authKey = null;
-    private DataAlgorithm dataAlgorithm = DataAlgorithm.AES256_GCM;
+    private static Provider orDefaultProvider(Provider provider) {
+        if(provider == null) {
+            return BCProviderSingletone.getProvider();
+        }
+        return provider;
+    }
 
-    public AsymSecureFileOutputStream(OperationType operationType, OutputStream outputStream, Provider securityProvider) {
-        this.outputStream = outputStream;
-        if(securityProvider == null)
-            securityProvider = BCProviderSingletone.getProvider();
+    private AsymSecureFileOutputStream(OutputStreamOptions options) {
         try {
-            this.delegate = VersionRouter.getWriterDelegate().getDeclaredConstructor(OperationType.class, OutputStream.class, Provider.class).newInstance(operationType, outputStream, securityProvider);
-        } catch (InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+            this.options = options;
+            this.delegate = VersionRouter
+                    .findWriterDelegate(options.getVersion())
+                    .getDeclaredConstructor(OutputStreamOptions.class)
+                    .newInstance(options);
+            this.checkAndInit(false);
+        } catch (IOException | InstantiationException | IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
             // Never occur
             throw new RuntimeException(e);
         }
+    }
+
+    public AsymSecureFileOutputStream(AsymSecureFileVersion version, OperationType operationType, OutputStream outputStream, Provider securityProvider) throws NotSupportVersionException {
+        this(new OutputStreamOptions(
+                version, operationType, outputStream, false, orDefaultProvider(securityProvider), null, null
+        ));
+    }
+
+    public AsymSecureFileOutputStream(OperationType operationType, OutputStream outputStream, Provider securityProvider) {
+        this(new OutputStreamOptions(
+                AsymSecureFileVersion.LATEST, operationType, outputStream, false, orDefaultProvider(securityProvider), null, null
+        ));
     }
 
     @SuppressWarnings("unused")
@@ -60,7 +76,7 @@ public class AsymSecureFileOutputStream extends OutputStream {
         if(this.delegate.getOperationType() != OperationType.PUBLIC_ENCRYPT) {
             throw new IOException("The local private key is only used in PUBLIC_ENCRYPT.");
         }
-        this.localPrivateKey = privateKey;
+        this.options.setLocalPrivateKey(privateKey);
     }
 
     /**
@@ -70,11 +86,11 @@ public class AsymSecureFileOutputStream extends OutputStream {
      */
     public void setAsymKey(@NotNull KeyPair keyPair) throws IOException {
         if(this.delegate.getOperationType() == OperationType.SIGN) {
-            this.asymKey = keyPair.getPrivate();
+            this.options.setAsymKey(keyPair.getPrivate());
         }else if(this.delegate.getOperationType() == OperationType.PUBLIC_ENCRYPT) {
-            this.asymKey = keyPair.getPublic();
+            this.options.setAsymKey(keyPair.getPublic());
         }
-        this.asymAlgorithm = null;
+        this.options.setAsymAlgorithm(null);
         checkAndInit(false);
     }
 
@@ -84,14 +100,15 @@ public class AsymSecureFileOutputStream extends OutputStream {
      * @param keyPair keyPair
      * @param asymAlgorithm asymAlgorithm
      * @throws IOException
+     * @deprecated use jasf version 4 and setAsymKey instead of AsymAlgorithm.
      */
-    public void setAsymKey(@NotNull KeyPair keyPair, AsymAlgorithm asymAlgorithm) throws IOException {
+    public void setAsymKey(@NotNull KeyPair keyPair, AsymAlgorithmOld asymAlgorithm) throws IOException {
         if(this.delegate.getOperationType() == OperationType.SIGN) {
-            this.asymKey = keyPair.getPrivate();
+            this.options.setAsymKey(keyPair.getPrivate());
         }else if(this.delegate.getOperationType() == OperationType.PUBLIC_ENCRYPT) {
-            this.asymKey = keyPair.getPublic();
+            this.options.setAsymKey(keyPair.getPublic());
         }
-        this.asymAlgorithm = asymAlgorithm;
+        this.options.setAsymAlgorithm(asymAlgorithm);
         checkAndInit(false);
     }
 
@@ -102,8 +119,8 @@ public class AsymSecureFileOutputStream extends OutputStream {
      */
     @SuppressWarnings("unused")
     public void setAsymKey(@NotNull Key key) throws IOException {
-        this.asymKey = key;
-        this.asymAlgorithm = null;
+        this.options.setAsymKey(key);
+        this.options.setAsymAlgorithm(null);
         checkAndInit(false);
     }
 
@@ -113,29 +130,29 @@ public class AsymSecureFileOutputStream extends OutputStream {
      * @param key key
      */
     @SuppressWarnings("unused")
-    public void setAsymKey(@NotNull Key key, AsymAlgorithm asymAlgorithm) throws IOException {
-        this.asymKey = key;
-        this.asymAlgorithm = asymAlgorithm;
+    public void setAsymKey(@NotNull Key key, AsymAlgorithmOld asymAlgorithm) throws IOException {
+        this.options.setAsymKey(key);
+        this.options.setAsymAlgorithm(asymAlgorithm);
         checkAndInit(false);
     }
 
     @SuppressWarnings("unused")
     public void setDataAlgorithm(DataAlgorithm dataAlgorithm) throws IOException {
-        this.dataAlgorithm = dataAlgorithm;
+        this.options.setDataAlgorithm(dataAlgorithm);
         checkAndInit(false);
     }
 
     @SuppressWarnings("unused")
     public void setAuthKey(byte[] authKey) throws IOException {
-        this.authKey = authKey;
+        this.options.setAuthKey(authKey);
         checkAndInit(false);
     }
 
     public void enableTimestamping(boolean enabled, String tsaLocation) {
         if(enabled) {
-            this.delegate.enableTimestamping(tsaLocation);
+            this.options.enableTimestamping(tsaLocation);
         }else{
-            this.delegate.enableTimestamping(null);
+            this.options.enableTimestamping(null);
         }
     }
 
@@ -154,7 +171,7 @@ public class AsymSecureFileOutputStream extends OutputStream {
 
     @Override
     public void flush() throws IOException {
-        outputStream.flush();
+        this.options.getOutputStream().flush();
     }
 
     @SuppressWarnings("unused")
@@ -171,7 +188,7 @@ public class AsymSecureFileOutputStream extends OutputStream {
             this.delegate.finish();
             this.finished = true;
         }
-        outputStream.close();
+        this.options.getOutputStream().close();
     }
 
     public void setUserChunk(UserChunk userChunk) throws IOException {
@@ -182,22 +199,98 @@ public class AsymSecureFileOutputStream extends OutputStream {
     private void checkAndInit(boolean force) throws IOException {
         if(this.inited)
             return ;
-        if(this.asymKey != null && this.dataAlgorithm != null && this.authKey != null) {
-            this.delegate.init(this.asymKey, this.asymAlgorithm, this.dataAlgorithm, this.authKey, this.localPrivateKey);
-            this.asymKey = null;
-            this.authKey = null;
-            this.localPrivateKey = null;
+        if(this.options.getAsymKey() != null && this.options.getDataAlgorithm() != null && this.options.getAuthKey() != null) {
+            this.delegate.init();
             this.inited = true;
         }else if(force) {
-            if(this.asymKey == null) {
+            if(this.options.getAsymKey() == null) {
                 throw new IOException("Empty asymKey");
             }
-            if(this.dataAlgorithm == null) {
+            if(this.options.getDataAlgorithm() == null) {
                 throw new IOException("Empty dataAlgorithm");
             }
-            if(this.authKey == null) {
+            if(this.options.getAuthKey() == null) {
                 throw new IOException("Empty authKey");
             }
+        }
+    }
+
+    public static Builder sign(OutputStream outputStream) {
+        return new Builder(AsymSecureFileVersion.JASF_4_1, OperationType.SIGN, outputStream);
+    }
+
+    public static Builder publicEncrypt(OutputStream outputStream) {
+        return new Builder(AsymSecureFileVersion.JASF_4_1, OperationType.PUBLIC_ENCRYPT, outputStream);
+    }
+
+    public static Builder jasf4Sign(OutputStream outputStream) {
+        return new Builder(AsymSecureFileVersion.JASF_4_1, OperationType.SIGN, outputStream);
+    }
+
+    public static Builder jasf4PublicEncrypt(OutputStream outputStream) {
+        return new Builder(AsymSecureFileVersion.JASF_4_1, OperationType.PUBLIC_ENCRYPT, outputStream);
+    }
+
+    public static class Builder {
+        final AsymSecureFileVersion version;
+        final OperationType operationType;
+        final OutputStream outputStream;
+        Provider securityProvider = null;
+        boolean excludeHeader = false;
+        byte[] authKey = null;
+        String tsaLocation = null;
+        Key asymKey = null;
+
+        public Builder(AsymSecureFileVersion version, OperationType operationType, OutputStream outputStream) {
+            this.version = version;
+            this.operationType = operationType;
+            this.outputStream = outputStream;
+        }
+
+        public Builder securityProvider(Provider securityProvider) {
+            this.securityProvider = securityProvider;
+            return this;
+        }
+
+        public Builder excludeHeader(boolean excludeHeader) {
+            this.excludeHeader = excludeHeader;
+            return this;
+        }
+
+        public Builder authKey(byte[] authKey) {
+            this.authKey = authKey;
+            return this;
+        }
+
+        public Builder authKey(String authKey) {
+            this.authKey = authKey.getBytes(StandardCharsets.UTF_8);
+            return this;
+        }
+
+        public Builder asymKey(Key key) {
+            this.asymKey = key;
+            return this;
+        }
+
+        public Builder enableTimestamping(String tsaLocation) {
+            this.tsaLocation = tsaLocation;
+            return this;
+        }
+
+        public AsymSecureFileOutputStream build() throws NotSupportAlgorithmException {
+            OutputStreamOptions options = new OutputStreamOptions(
+                    (this.version == null) ?
+                            AsymSecureFileVersion.LATEST : this.version,
+                    this.operationType,
+                    this.outputStream,
+                    this.excludeHeader,
+                    (this.securityProvider == null) ?
+                            BCProviderSingletone.getProvider() : this.securityProvider,
+                    this.authKey,
+                    this.tsaLocation
+            );
+            options.setAsymKey(this.asymKey);
+            return new AsymSecureFileOutputStream(options);
         }
     }
 }

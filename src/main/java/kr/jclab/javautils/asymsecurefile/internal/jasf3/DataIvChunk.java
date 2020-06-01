@@ -8,7 +8,7 @@
 
 package kr.jclab.javautils.asymsecurefile.internal.jasf3;
 
-import kr.jclab.javautils.asymsecurefile.Chunk;
+import kr.jclab.javautils.asymsecurefile.internal.deprecated.Chunk;
 import kr.jclab.javautils.asymsecurefile.InvalidFileException;
 
 import java.util.Arrays;
