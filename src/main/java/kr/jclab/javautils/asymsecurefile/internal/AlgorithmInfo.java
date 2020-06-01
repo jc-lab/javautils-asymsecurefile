@@ -9,6 +9,7 @@
 package kr.jclab.javautils.asymsecurefile.internal;
 
 import kr.jclab.javautils.asymsecurefile.AsymAlgorithmOld;
+import kr.jclab.javautils.asymsecurefile.AsymmetricKeyObject;
 import kr.jclab.javautils.asymsecurefile.NotSupportAlgorithmException;
 import org.bouncycastle.asn1.*;
 import org.bouncycastle.asn1.pkcs.PKCSObjectIdentifiers;
@@ -29,33 +30,18 @@ public class AlgorithmInfo {
 
     private final AlgorithmIdentifier algorithmIdentifier;
 
-    public AlgorithmInfo(Key key) throws NotSupportAlgorithmException {
-        AsymAlgorithmOld algorithm = null;
-        byte[] encoded = key.getEncoded();
-        ASN1ObjectIdentifier keySpecOid = null;
+    public AlgorithmInfo(AsymmetricKeyObject keyObject, Key key) throws NotSupportAlgorithmException {
         int keySize = 0;
-        if("PKCS#8".equalsIgnoreCase(key.getFormat())) {
-            // Private Key
-            PrivateKeyInfo privateKeyInfo = PrivateKeyInfo.getInstance(encoded);
-            keySpecOid = (privateKeyInfo.getPrivateKeyAlgorithm().getParameters() instanceof ASN1ObjectIdentifier) ? ((ASN1ObjectIdentifier)privateKeyInfo.getPrivateKeyAlgorithm().getParameters()) : null;
-            if(keySpecOid == null) {
-                keySpecOid = privateKeyInfo.getPrivateKeyAlgorithm().getAlgorithm();
-            }
-            this.algorithmIdentifier = privateKeyInfo.getPrivateKeyAlgorithm();
-        }else if("X.509".equalsIgnoreCase(key.getFormat())) {
-            SubjectPublicKeyInfo publicKeyInfo = SubjectPublicKeyInfo.getInstance(encoded);
-            keySpecOid = (publicKeyInfo.getAlgorithm().getParameters() instanceof ASN1ObjectIdentifier) ? ((ASN1ObjectIdentifier)publicKeyInfo.getAlgorithm().getParameters()) : null;
-            if(keySpecOid == null) {
-                keySpecOid = publicKeyInfo.getAlgorithm().getAlgorithm();
-            }
-            this.algorithmIdentifier = publicKeyInfo.getAlgorithm();
-        }else{
-            this.algorithmIdentifier = null;
-        }
-
-        if(key instanceof ECKey) {
+        AsymAlgorithmOld algorithm = null;
+        this.algorithmIdentifier = keyObject.getAlgorithmIdentifier();
+        if(
+                AsymmetricAlgorithmType.ec.equals(keyObject.getAlgorithmType()) ||
+                        AsymmetricAlgorithmType.x448.equals(keyObject.getAlgorithmType()) ||
+                        AsymmetricAlgorithmType.x25519.equals(keyObject.getAlgorithmType()) ||
+                        AsymmetricAlgorithmType.edwards.equals(keyObject.getAlgorithmType())
+        ) {
             algorithm = AsymAlgorithmOld.EC;
-        }else if(key instanceof RSAKey) {
+        }else if(AsymmetricAlgorithmType.rsa.equals(keyObject.getAlgorithmType())) {
             algorithm = AsymAlgorithmOld.RSA;
         }
 
@@ -69,7 +55,7 @@ public class AlgorithmInfo {
         }
 
         this.algorithmOld = algorithm;
-        this.oid = keySpecOid;
+        this.oid = keyObject.getAlgorithmIdentifier().getAlgorithm();
         this.keySize = keySize;
     }
 

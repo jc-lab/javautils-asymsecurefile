@@ -63,7 +63,6 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
 
     private final DefaultHeaderChunk defaultHeaderChunk;
 
-    private transient byte[] authKey = null;
     private transient byte[] authEncKey = null;
 
     private transient byte[] macKey = null;
@@ -89,13 +88,17 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
             key = this.options.getAsymKey().getPublicKey();
         }
 
-        this.algorithmInfo = new AlgorithmInfo(key, this.options.getAsymAlgorithm());
+        this.algorithmInfo = new AlgorithmInfo(this.options.getAsymKey(), key);
         if(this.algorithmInfo.getAlgorithmOld() == null) {
             throw new NotSupportAlgorithmException();
         }
         this.asymKey = key;
         this.localPrivateKey = localPrivateKey;
-        this.authKey = authKey;
+
+        if(dataAlgorithm == null) {
+            dataAlgorithm = DataAlgorithm.AES256_GCM;
+        }
+
         this.dataAlgorithm = dataAlgorithm;
         setRawChunk(AsymAlgorithmChunk.builder().withAlgorithmInfo(this.algorithmInfo).build());
 
@@ -110,7 +113,7 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
 
             // AuthEncKey = HmacSHA256(authKey, ASN1DefaultHeaderObject.seed)
             Mac authEncKeyMac = Mac.getInstance("HmacSHA256");
-            authEncKeyMac.init(new SecretKeySpec(this.authKey, authEncKeyMac.getAlgorithm()));
+            authEncKeyMac.init(new SecretKeySpec(this.options.getAuthKey(), authEncKeyMac.getAlgorithm()));
             this.authEncKey = authEncKeyMac.doFinal(this.defaultHeaderChunk.seed());
 
             // dataKey
@@ -120,7 +123,7 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
             if(this.operationType == OperationType.PUBLIC_ENCRYPT) {
                 byte[] seedKey;
                 Mac dataKeyMac = Mac.getInstance("HmacSHA512", this.workSecurityProvider);
-                dataKeyMac.init(new SecretKeySpec(this.authKey, dataKeyMac.getAlgorithm()));
+                dataKeyMac.init(new SecretKeySpec(this.options.getAuthKey(), dataKeyMac.getAlgorithm()));
 
                 if ((this.algorithmInfo.getAlgorithmOld() == AsymAlgorithmOld.EC) || (this.algorithmInfo.getAlgorithmOld() == AsymAlgorithmOld.PRIME)) {
                     // Like ECIES
@@ -161,7 +164,7 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
                 setRawChunk(encryptedSeedKeyChunkBuilder.build());
             }else if(this.operationType == OperationType.SIGN) {
                 dataKey = this.authEncKey;
-                this.macKey = this.authKey;
+                this.macKey = this.options.getAuthKey();
             }else{
                 throw new RuntimeException("Unknown error");
             }
@@ -200,7 +203,7 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
             byte[] dataIV = new byte[16];
             this.random.nextBytes(dataIV);
             try {
-                Cipher cipher = createChunkCipher(dataIV, this.authEncKey, this.authKey);
+                Cipher cipher = createChunkCipher(dataIV, this.authEncKey, this.options.getAuthKey());
                 byte[] ciphertext = cipher.doFinal(chunk.getData(), 0, chunk.getDataSize());
                 byte[] buffer = new byte[16 + ciphertext.length];
                 System.arraycopy(dataIV, 0, buffer, 0, dataIV.length);
