@@ -240,6 +240,7 @@ public class AsymSecureFileOutputStream extends OutputStream {
         byte[] authKey = null;
         String tsaLocation = null;
         Key asymKey = null;
+        KeyPair keyPair = null;
 
         public Builder(AsymSecureFileVersion version, OperationType operationType, OutputStream outputStream) {
             this.version = version;
@@ -272,6 +273,11 @@ public class AsymSecureFileOutputStream extends OutputStream {
             return this;
         }
 
+        public Builder asymKey(KeyPair keyPair) {
+            this.keyPair = keyPair;
+            return this;
+        }
+
         public Builder enableTimestamping(String tsaLocation) {
             this.tsaLocation = tsaLocation;
             return this;
@@ -289,7 +295,11 @@ public class AsymSecureFileOutputStream extends OutputStream {
                     this.authKey,
                     this.tsaLocation
             );
-            options.setAsymKey(this.asymKey);
+            if (this.keyPair != null) {
+                options.setAsymKey(this.keyPair);
+            }else{
+                options.setAsymKey(this.asymKey);
+            }
             return new AsymSecureFileOutputStream(options);
         }
     }

@@ -111,7 +111,7 @@ public class Jasf4OutputStreamDelegate extends OutputStreamDelegate {
                 KeyPair ephemeralKeyPair = this.options.getAsymKey().generateKeyPair();
                 AsymmetricKeyObject ephemeralPrivateKey = AsymmetricKeyObject.fromKey(ephemeralKeyPair.getPrivate(), this.options.getAsymKey().getSecurityProvider());
                 KeyAgreement keyAgreement = ephemeralPrivateKey.createKeyAgreement();
-                keyAgreement.doPhase(this.options.getAsymKey().getKey(), true);
+                keyAgreement.doPhase(this.options.getAsymKey().getPublicKey(), true);
                 byte[] hkdfResult = HkdfUtils.generateKey(
                         HashAlgorithms.findByOid(NISTObjectIdentifiers.id_sha256),
                         keyAgreement.generateSecret(),

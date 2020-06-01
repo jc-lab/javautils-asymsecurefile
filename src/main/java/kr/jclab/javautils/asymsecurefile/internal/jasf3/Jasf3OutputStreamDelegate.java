@@ -82,11 +82,18 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
         if(state != State.INIT)
             return ;
 
-        this.algorithmInfo = new AlgorithmInfo(this.options.getAsymKey().getKey(), this.options.getAsymAlgorithm());
+        Key key;
+        if(OperationType.SIGN.equals(this.options.getOperationType())) {
+            key = this.options.getAsymKey().getPrivateKey();
+        }else{
+            key = this.options.getAsymKey().getPublicKey();
+        }
+
+        this.algorithmInfo = new AlgorithmInfo(key, this.options.getAsymAlgorithm());
         if(this.algorithmInfo.getAlgorithmOld() == null) {
             throw new NotSupportAlgorithmException();
         }
-        this.asymKey = this.options.getAsymKey().getKey();
+        this.asymKey = key;
         this.localPrivateKey = localPrivateKey;
         this.authKey = authKey;
         this.dataAlgorithm = dataAlgorithm;

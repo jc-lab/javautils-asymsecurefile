@@ -1,6 +1,5 @@
 package kr.jclab.javautils.asymsecurefile;
 
-import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 
 import javax.crypto.Cipher;

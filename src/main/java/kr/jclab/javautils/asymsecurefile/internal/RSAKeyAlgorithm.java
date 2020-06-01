@@ -33,7 +33,7 @@ public class RSAKeyAlgorithm implements AsymKeyAlgorithm {
             cipher = Cipher.getInstance(CIPHER_TRANSFORMATION, keyObject.getSecurityProvider());
         else
             cipher = Cipher.getInstance(CIPHER_TRANSFORMATION);
-        cipher.init(Cipher.ENCRYPT_MODE, keyObject.getKey());
+        cipher.init(Cipher.ENCRYPT_MODE, keyObject.getPublicKey());
         return cipher;
     }
 
@@ -44,7 +44,7 @@ public class RSAKeyAlgorithm implements AsymKeyAlgorithm {
             cipher = Cipher.getInstance(CIPHER_TRANSFORMATION, keyObject.getSecurityProvider());
         else
             cipher = Cipher.getInstance(CIPHER_TRANSFORMATION);
-        cipher.init(Cipher.DECRYPT_MODE, keyObject.getKey());
+        cipher.init(Cipher.DECRYPT_MODE, keyObject.getPrivateKey());
         return cipher;
     }
 
@@ -55,7 +55,7 @@ public class RSAKeyAlgorithm implements AsymKeyAlgorithm {
             signature = Signature.getInstance(SIGN_ALGORITHM, keyObject.getSecurityProvider());
         else
             signature = Signature.getInstance(SIGN_ALGORITHM);
-        signature.initSign((PrivateKey)keyObject.getKey());
+        signature.initSign((PrivateKey)keyObject.getPrivateKey());
         return signature;
     }
 
@@ -66,7 +66,7 @@ public class RSAKeyAlgorithm implements AsymKeyAlgorithm {
             signature = Signature.getInstance(SIGN_ALGORITHM, keyObject.getSecurityProvider());
         else
             signature = Signature.getInstance(SIGN_ALGORITHM);
-        signature.initVerify((PublicKey) keyObject.getKey());
+        signature.initVerify((PublicKey) keyObject.getPublicKey());
         return signature;
     }
 

@@ -19,7 +19,8 @@ import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 
 public class AsymmetricKeyObject {
-    private final Key key;
+    private final PrivateKey privateKey;
+    private final PublicKey publicKey;
     private final Provider securityProvider;
     private final AsymmetricAlgorithmType algorithmType;
     private final AlgorithmIdentifier algorithmIdentifier;
@@ -34,7 +35,28 @@ public class AsymmetricKeyObject {
     private final AsymKeyAlgorithm keyAlgorithm;
 
     private AsymmetricKeyObject(Key key, Provider securityProvider, AsymmetricAlgorithmType algorithmType, AlgorithmIdentifier algorithmIdentifier, AsymKeyAlgorithm keyAlgorithm, int keySize, boolean signable, boolean verifyable, boolean keyAgreementable, boolean publicEncryptable, boolean privateDecryptable) {
-        this.key = key;
+        if(key instanceof PrivateKey) {
+            this.privateKey = (PrivateKey)key;
+            this.publicKey = null;
+        }else{
+            this.publicKey = (PublicKey)key;
+            this.privateKey = null;
+        }
+        this.securityProvider = securityProvider;
+        this.algorithmType = algorithmType;
+        this.algorithmIdentifier = algorithmIdentifier;
+        this.keyAlgorithm = keyAlgorithm;
+        this.keySize = keySize;
+        this.signable = signable;
+        this.verifyable = verifyable;
+        this.keyAgreementable = keyAgreementable;
+        this.publicEncryptable = publicEncryptable;
+        this.privateDecryptable = privateDecryptable;
+    }
+
+    private AsymmetricKeyObject(KeyPair keyPair, Provider securityProvider, AsymmetricAlgorithmType algorithmType, AlgorithmIdentifier algorithmIdentifier, AsymKeyAlgorithm keyAlgorithm, int keySize, boolean signable, boolean verifyable, boolean keyAgreementable, boolean publicEncryptable, boolean privateDecryptable) {
+        this.privateKey = keyPair.getPrivate();
+        this.publicKey = keyPair.getPublic();
         this.securityProvider = securityProvider;
         this.algorithmType = algorithmType;
         this.algorithmIdentifier = algorithmIdentifier;
@@ -112,7 +134,7 @@ public class AsymmetricKeyObject {
         byte[] encoded = key.getEncoded();
         ASN1ObjectIdentifier keySpecOid = null;
         int keySize = 0;
-        if("PKCS#8".equalsIgnoreCase(key.getFormat())) {
+        if(key instanceof PrivateKey) {
             // Private Key
             PrivateKeyInfo privateKeyInfo = PrivateKeyInfo.getInstance(encoded);
             keySpecOid = (privateKeyInfo.getPrivateKeyAlgorithm().getParameters() instanceof ASN1ObjectIdentifier) ? ((ASN1ObjectIdentifier)privateKeyInfo.getPrivateKeyAlgorithm().getParameters()) : null;
@@ -120,7 +142,7 @@ public class AsymmetricKeyObject {
                 keySpecOid = privateKeyInfo.getPrivateKeyAlgorithm().getAlgorithm();
             }
             algorithmIdentifier = privateKeyInfo.getPrivateKeyAlgorithm();
-        }else if("X.509".equalsIgnoreCase(key.getFormat())) {
+        }else if(key instanceof PublicKey) {
             SubjectPublicKeyInfo publicKeyInfo = SubjectPublicKeyInfo.getInstance(encoded);
             keySpecOid = (publicKeyInfo.getAlgorithm().getParameters() instanceof ASN1ObjectIdentifier) ? ((ASN1ObjectIdentifier)publicKeyInfo.getAlgorithm().getParameters()) : null;
             if(keySpecOid == null) {
@@ -168,8 +190,69 @@ public class AsymmetricKeyObject {
         }
     }
 
-    public Key getKey() {
-        return key;
+    public static AsymmetricKeyObject fromKey(KeyPair keyPair, Provider securityProvider) throws NotSupportAlgorithmException {
+        AsymmetricAlgorithmType algorithmType = null;
+        int keySize = 0;
+
+        SubjectPublicKeyInfo publicKeyInfo = SubjectPublicKeyInfo.getInstance(keyPair.getPublic().getEncoded());
+        ASN1ObjectIdentifier keySpecOid = (publicKeyInfo.getAlgorithm().getParameters() instanceof ASN1ObjectIdentifier) ? ((ASN1ObjectIdentifier)publicKeyInfo.getAlgorithm().getParameters()) : null;
+        if(keySpecOid == null) {
+            keySpecOid = publicKeyInfo.getAlgorithm().getAlgorithm();
+        }
+        AlgorithmIdentifier algorithmIdentifier = publicKeyInfo.getAlgorithm();
+
+        if("ec".equalsIgnoreCase(keyPair.getPrivate().getAlgorithm())) {
+            algorithmType = AsymmetricAlgorithmType.ec;
+            ECKey ecPublicKey = (ECKey)keyPair.getPublic();
+            keySize = ecPublicKey.getParams().getCurve().getField().getFieldSize();
+            return new AsymmetricKeyObject(
+                    keyPair,
+                    securityProvider,
+                    algorithmType,
+                    algorithmIdentifier,
+                    new ECKeyAlgorithm(),
+                    keySize,
+                    true,
+                    true,
+                    true,
+                    false,
+                    false
+            );
+        }else if("rsa".equalsIgnoreCase(keyPair.getPrivate().getAlgorithm())) {
+            algorithmType = AsymmetricAlgorithmType.rsa;
+            RSAKey rsaPublicKey = (RSAKey)keyPair.getPublic();
+            keySize = rsaPublicKey.getModulus().bitLength();
+            return new AsymmetricKeyObject(
+                    keyPair,
+                    securityProvider,
+                    algorithmType,
+                    algorithmIdentifier,
+                    new RSAKeyAlgorithm(),
+                    keySize,
+                    true,
+                    true,
+                    false,
+                    true,
+                    true
+            );
+        }else{
+            throw new NotSupportAlgorithmException("Unknown Key Type");
+        }
+    }
+
+//    public Key getKey() {
+//        if (this.privateKey != null) {
+//            return this.privateKey;
+//        }
+//        return this.publicKey;
+//    }
+
+    public Key getPrivateKey() {
+        return privateKey;
+    }
+
+    public Key getPublicKey() {
+        return publicKey;
     }
 
     public Provider getSecurityProvider() {

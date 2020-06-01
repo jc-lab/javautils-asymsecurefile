@@ -53,7 +53,7 @@ public class ECKeyAlgorithm implements AsymKeyAlgorithm {
             signature = Signature.getInstance(SIGN_ALGORITHM, keyObject.getSecurityProvider());
         else
             signature = Signature.getInstance(SIGN_ALGORITHM);
-        signature.initSign((PrivateKey)keyObject.getKey());
+        signature.initSign((PrivateKey)keyObject.getPrivateKey());
         return signature;
     }
 
@@ -64,7 +64,7 @@ public class ECKeyAlgorithm implements AsymKeyAlgorithm {
             signature = Signature.getInstance(SIGN_ALGORITHM, keyObject.getSecurityProvider());
         else
             signature = Signature.getInstance(SIGN_ALGORITHM);
-        signature.initVerify((PublicKey) keyObject.getKey());
+        signature.initVerify((PublicKey) keyObject.getPublicKey());
         return signature;
     }
 
@@ -75,7 +75,7 @@ public class ECKeyAlgorithm implements AsymKeyAlgorithm {
             keyAgreement = KeyAgreement.getInstance("ECDH", keyObject.getSecurityProvider());
         else
             keyAgreement = KeyAgreement.getInstance("ECDH");
-        keyAgreement.init(keyObject.getKey());
+        keyAgreement.init(keyObject.getPrivateKey());
         return keyAgreement;
     }
 

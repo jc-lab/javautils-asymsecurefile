@@ -4,6 +4,7 @@ import kr.jclab.javautils.asymsecurefile.*;
 
 import java.io.OutputStream;
 import java.security.Key;
+import java.security.KeyPair;
 import java.security.PrivateKey;
 import java.security.Provider;
 
@@ -40,6 +41,13 @@ public class OutputStreamOptions {
         return AsymmetricKeyObject.fromKey(key, securityProvider);
     }
 
+    public static AsymmetricKeyObject convertToAsymmetricKeyObject(KeyPair keyPair, Provider securityProvider) throws NotSupportAlgorithmException {
+        if (keyPair == null) {
+            return null;
+        }
+        return AsymmetricKeyObject.fromKey(keyPair, securityProvider);
+    }
+
     public void setAuthKey(byte[] authKey) {
         if(this.authKey != null) {
             throw new IllegalStateException("The authkey can only be set once");
@@ -52,6 +60,13 @@ public class OutputStreamOptions {
             throw new IllegalStateException("The asymKey can only be set once");
         }
         this.asymKey = convertToAsymmetricKeyObject(asymKey, this.securityProvider);
+    }
+
+    public void setAsymKey(KeyPair keyPair) throws NotSupportAlgorithmException {
+        if(this.asymKey != null) {
+            throw new IllegalStateException("The asymKey can only be set once");
+        }
+        this.asymKey = convertToAsymmetricKeyObject(keyPair, this.securityProvider);
     }
 
     public void setLocalPrivateKey(PrivateKey localPrivateKey) {

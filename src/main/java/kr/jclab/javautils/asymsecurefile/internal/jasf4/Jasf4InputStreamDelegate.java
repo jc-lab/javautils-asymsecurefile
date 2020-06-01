@@ -281,7 +281,7 @@ public class Jasf4InputStreamDelegate extends InputStreamDelegate {
             }
             if (OperationType.PUBLIC_ENCRYPT.equals(this.operationType)) {
                 if(this.asymKey == null && this.keyPair != null) {
-                    this.asymKey = AsymmetricKeyObject.fromKey(this.keyPair.getPrivate(), this.securityProvider);
+                    this.asymKey = AsymmetricKeyObject.fromKey(this.keyPair, this.securityProvider);
                 }
                 assert this.asymKey != null;
                 if (!defaultHeaderChunk.getAsymmetricAlgorithmType().equals(this.asymKey.getAlgorithmType())) {
@@ -303,7 +303,7 @@ public class Jasf4InputStreamDelegate extends InputStreamDelegate {
                     Asn1DHCheckDataChunk dhCheckDataChunk = this.getChunk(Asn1DHCheckDataChunk.class, Asn1DHCheckDataChunk.CHUNK_ID);
                     AsymmetricKeyObject publicKey = AsymmetricKeyObject.fromPublicKey(ecPublicKeyChunk.getData(), this.securityProvider);
                     KeyAgreement keyAgreement = this.asymKey.createKeyAgreement();
-                    keyAgreement.doPhase(publicKey.getKey(), true);
+                    keyAgreement.doPhase(publicKey.getPublicKey(), true);
                     byte[] hkdfResult = HkdfUtils.generateKey(
                             HashAlgorithms.findByOid(NISTObjectIdentifiers.id_sha256),
                             keyAgreement.generateSecret(),
