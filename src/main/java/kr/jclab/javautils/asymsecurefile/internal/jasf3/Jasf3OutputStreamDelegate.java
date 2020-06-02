@@ -208,7 +208,7 @@ public class Jasf3OutputStreamDelegate extends OutputStreamDelegate {
                 byte[] buffer = new byte[16 + ciphertext.length];
                 System.arraycopy(dataIV, 0, buffer, 0, dataIV.length);
                 System.arraycopy(ciphertext, 0, buffer, dataIV.length, ciphertext.length);
-                this.rawChunkMap.put(0x800000 | chunk.getUserCode(), new RawChunk((byte)(0x80 | 0x04), (short)chunk.getUserCode(),  (short)buffer.length, buffer));
+                this.rawChunkMap.put(0x800000 | chunk.getUserCode(), new RawChunk((byte)(0x80 | Chunk.Flag.EncryptedWithAuthEncKey.value()), (short)chunk.getUserCode(),  (short)buffer.length, buffer));
             } catch (NoSuchPaddingException | NoSuchAlgorithmException | InvalidAlgorithmParameterException | InvalidKeyException | IllegalBlockSizeException | BadPaddingException e) {
                 throw new IOException(e);
             }
