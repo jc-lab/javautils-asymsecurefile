@@ -137,9 +137,44 @@ public class Jasf3ECKeyTest {
     }
 
     @Test
-    public void verifyWithPreGeneratedTest() throws IOException {
+    public void signAndVerifyWithUserChunkTest() throws IOException {
+        final Provider securityProvider = new BouncyCastleProvider();
+        byte[] signedPayload;
+
         {
-            InputStream bis = this.getClass().getResourceAsStream("/pregenerated/ec-sign.jasf");
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            AsymSecureFileOutputStream outputStream = new AsymSecureFileOutputStream.Builder(AsymSecureFileVersion.JASF_3, OperationType.SIGN, bos)
+                    .securityProvider(securityProvider)
+                    .authKey("1234")
+                    .excludeHeader(false)
+//                    .enableTimestamping("http://tsa.starfieldtech.com")
+                    .asymKey(this.keyPair.getPrivate())
+                    .build();
+
+            outputStream.setUserChunk(
+                    UserChunk.builder()
+                            .withUserCode((short)0x1)
+                            .withData("I_AM_NORMAL-1".getBytes())
+                            .build());
+            outputStream.setUserChunk(
+                    UserChunk.builder()
+                            .withUserCode((short)0x2)
+                            .withData("I_AM_SECRET-1".getBytes())
+                            .withFlag(UserChunk.Flag.EncryptWithAuthKey)
+                            .build());
+
+            outputStream.write("HELLO WORLD,".getBytes());
+            outputStream.write("I AM HAPPY".getBytes());
+
+            outputStream.close();
+
+            signedPayload = bos.toByteArray();
+        }
+
+        System.out.println(TestUtils.dump(signedPayload, false));
+
+        {
+            ByteArrayInputStream bis = new ByteArrayInputStream(signedPayload);
             AsymSecureFileInputStream inputStream = new AsymSecureFileInputStream(bis);
             ByteArrayOutputStream bos = new ByteArrayOutputStream();
 
@@ -151,6 +186,16 @@ public class Jasf3ECKeyTest {
             }
             inputStream.setAuthKey("1234");
             inputStream.setAsymKey(this.keyPair.getPublic());
+
+            {
+                UserChunk userChunk = inputStream.getUserChunk((short)0x01);
+                assert "I_AM_NORMAL-1".equals(new String(userChunk.getData()));
+            }
+            {
+                UserChunk userChunk = inputStream.getUserChunk((short)0x02);
+                assert "I_AM_SECRET-1".equals(new String(userChunk.getData()));
+            }
+
             while((r = inputStream.read(tempBuf)) > 0) {
                 bos.write(tempBuf, 0, r);
             }
@@ -363,6 +408,74 @@ public class Jasf3ECKeyTest {
             }
             inputStream.setAuthKey("1234");
             inputStream.setAsymKey(this.keyPair.getPrivate());
+            while((r = inputStream.read(tempBuf)) > 0) {
+                bos.write(tempBuf, 0, r);
+            }
+
+            assert new String(bos.toByteArray()).equals("HELLO WORLD,I AM HAPPY");
+        }
+    }
+
+    @Test
+    public void publicEncryptAndDecryptWithUserChunksTest() throws IOException {
+        final Provider securityProvider = new BouncyCastleProvider();
+        byte[] signedPayload;
+
+        {
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            AsymSecureFileOutputStream outputStream = new AsymSecureFileOutputStream.Builder(AsymSecureFileVersion.JASF_3, OperationType.PUBLIC_ENCRYPT, bos)
+                    .securityProvider(securityProvider)
+                    .authKey("1234")
+                    .excludeHeader(false)
+//                    .enableTimestamping("http://tsa.starfieldtech.com")
+                    .asymKey(this.keyPair.getPublic())
+                    .build();
+
+            outputStream.setUserChunk(
+                    UserChunk.builder()
+                            .withUserCode((short)0x1)
+                            .withData("I_AM_NORMAL-1".getBytes())
+                            .build());
+            outputStream.setUserChunk(
+                    UserChunk.builder()
+                            .withUserCode((short)0x2)
+                            .withData("I_AM_SECRET-1".getBytes())
+                            .withFlag(UserChunk.Flag.EncryptWithAuthKey)
+                            .build());
+
+            outputStream.write("HELLO WORLD,".getBytes());
+            outputStream.write("I AM HAPPY".getBytes());
+
+            outputStream.close();
+
+            signedPayload = bos.toByteArray();
+        }
+
+        System.out.println(TestUtils.dump(signedPayload, false));
+
+        {
+            ByteArrayInputStream bis = new ByteArrayInputStream(signedPayload);
+            AsymSecureFileInputStream inputStream = new AsymSecureFileInputStream(bis);
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+
+            byte[] tempBuf = new byte[3];
+
+            int r;
+            while((r = inputStream.headerRead()) == 1) {
+                System.out.println("Reading header...");
+            }
+            inputStream.setAuthKey("1234");
+            inputStream.setAsymKey(this.keyPair.getPrivate());
+
+            {
+                UserChunk userChunk = inputStream.getUserChunk((short)0x01);
+                assert "I_AM_NORMAL-1".equals(new String(userChunk.getData()));
+            }
+            {
+                UserChunk userChunk = inputStream.getUserChunk((short)0x02);
+                assert "I_AM_SECRET-1".equals(new String(userChunk.getData()));
+            }
+
             while((r = inputStream.read(tempBuf)) > 0) {
                 bos.write(tempBuf, 0, r);
             }
