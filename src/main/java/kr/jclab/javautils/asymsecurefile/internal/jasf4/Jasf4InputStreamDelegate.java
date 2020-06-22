@@ -85,7 +85,7 @@ public class Jasf4InputStreamDelegate extends InputStreamDelegate {
 
     private final Deque<DataChunkQueueItem> plainDataQueue = new ConcurrentLinkedDeque<>();
 
-    private List<UserChunk> cachedUserChunks = null;
+    private Map<Integer, UserChunk> cachedUserChunks = null;
 
     public Jasf4InputStreamDelegate(InputStream inputStream, Provider securityProvider, SignatureHeader signatureHeader) throws IOException {
         super(inputStream, securityProvider, signatureHeader);
@@ -479,7 +479,7 @@ public class Jasf4InputStreamDelegate extends InputStreamDelegate {
         if (this.cachedUserChunks != null) {
             return ;
         }
-        List<UserChunk> list = new LinkedList<>();
+        Map<Integer, UserChunk> map = new HashMap<>();
         for(Map.Entry<Integer, Asn1ObjectChunkBase> entry : this.chunkMap.entrySet()) {
             if (entry.getKey() >= ChunkId.CustomBegin.getValue()) {
                 Asn1CustomDataChunk customDataChunk = (Asn1CustomDataChunk)entry.getValue();
@@ -493,10 +493,10 @@ public class Jasf4InputStreamDelegate extends InputStreamDelegate {
                         .withUserCode(entry.getKey() - ChunkId.CustomBegin.getValue())
                         .withDataSize(data.length)
                         .withData(data);
-                list.add(builder.build());
+                map.put(entry.getKey() - ChunkId.CustomBegin.getValue(), builder.build());
             }
         }
-        this.cachedUserChunks = Collections.unmodifiableList(list);
+        this.cachedUserChunks = Collections.unmodifiableMap(map);
     }
 
     public TimeStampToken getTimestampToken() throws IOException, TSPException {
@@ -510,13 +510,13 @@ public class Jasf4InputStreamDelegate extends InputStreamDelegate {
     @Override
     public Enumeration<UserChunk> userChunks() throws IOException {
         parseUserChunks();
-        return Collections.enumeration(this.cachedUserChunks);
+        return Collections.enumeration(this.cachedUserChunks.values());
     }
 
     @Override
     public UserChunk getUserChunk(short code) throws IOException {
         parseUserChunks();
-        return this.cachedUserChunks.get(code);
+        return this.cachedUserChunks.get((int)code);
     }
 
     @Override
