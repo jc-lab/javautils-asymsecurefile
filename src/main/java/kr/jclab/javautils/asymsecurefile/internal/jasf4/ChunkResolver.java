@@ -13,19 +13,12 @@ import org.bouncycastle.asn1.ASN1Encodable;
 import org.bouncycastle.asn1.ASN1Integer;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.ASN1Sequence;
-import org.reflections.Reflections;
-import org.reflections.scanners.MethodAnnotationsScanner;
-import org.reflections.scanners.TypeAnnotationsScanner;
-import org.reflections.util.ClasspathHelper;
-import org.reflections.util.ConfigurationBuilder;
-import org.reflections.util.FilterBuilder;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 
 public class ChunkResolver {
     public interface IGetInstanceType<T> {
@@ -65,23 +58,38 @@ public class ChunkResolver {
     private static class SingletoneHolder {
         public static Map<ChunkId, ChunkHolder> CHUNK_MAP = new HashMap<>();
 
-        static {
-            final ClassLoader classLoader = SingletoneHolder.class.getClassLoader();
-            final String packageName = ChunkResolver.class.getPackage().getName();
-            Reflections reflections = new Reflections(new ConfigurationBuilder()
-                    .setUrls(ClasspathHelper.forPackage(packageName, classLoader))
-                    .addClassLoader(classLoader)
-                    .filterInputsBy(new FilterBuilder().includePackage(packageName))
-                    .setScanners(new MethodAnnotationsScanner(), new TypeAnnotationsScanner())
-            );
-            Set<Method> methods = reflections.getMethodsAnnotatedWith(ChunkInitializer.class);
-            for(Method method : methods) {
-                try {
-                    method.invoke(null);
-                } catch (IllegalAccessException | InvocationTargetException e) {
-                    e.printStackTrace();
+        private static void invokeChunkInitializer(Class<? extends Asn1ObjectChunkBase> clazz) {
+            for (Method method : clazz.getDeclaredMethods()) {
+                if(method.getAnnotation(ChunkInitializer.class) != null) {
+                    try {
+                        method.invoke(null);
+                    } catch (IllegalAccessException | InvocationTargetException e) {
+                        e.printStackTrace();
+                    }
+                    return ;
                 }
             }
+        }
+
+        static {
+            invokeChunkInitializer(Asn1AbstractChunk.class);
+            invokeChunkInitializer(Asn1AbstractEncryptedChunk.class);
+            invokeChunkInitializer(Asn1AsymAlgorithmIdentifierChunk.class);
+            invokeChunkInitializer(Asn1AuthKeyCheckChunk.class);
+            invokeChunkInitializer(Asn1CustomDataChunk.class);
+            invokeChunkInitializer(Asn1DataChunk.class);
+            invokeChunkInitializer(Asn1DataCryptoAlgorithmParameterSpecChunk.class);
+            invokeChunkInitializer(Asn1DataKeyInfoChunk.class);
+            invokeChunkInitializer(Asn1DataMacAlgorithmChunk.class);
+            invokeChunkInitializer(Asn1DefaultHeaderChunk.class);
+            invokeChunkInitializer(Asn1DHCheckDataChunk.class);
+            invokeChunkInitializer(Asn1EncryptedChunk.class);
+            invokeChunkInitializer(Asn1EncryptedDataKeyInfoChunk.class);
+            invokeChunkInitializer(Asn1EphemeralECPublicKeyChunk.class);
+            invokeChunkInitializer(Asn1FingerprintChunk.class);
+            invokeChunkInitializer(Asn1MacOfEncryptedDataChunk.class);
+            invokeChunkInitializer(Asn1SignedFingerprintChunk.class);
+            invokeChunkInitializer(Asn1TimestampChunk.class);
         }
     }
 }
