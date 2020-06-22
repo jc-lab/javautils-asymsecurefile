@@ -15,6 +15,10 @@ import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.ASN1Sequence;
 import org.reflections.Reflections;
 import org.reflections.scanners.MethodAnnotationsScanner;
+import org.reflections.scanners.TypeAnnotationsScanner;
+import org.reflections.util.ClasspathHelper;
+import org.reflections.util.ConfigurationBuilder;
+import org.reflections.util.FilterBuilder;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
@@ -62,7 +66,14 @@ public class ChunkResolver {
         public static Map<ChunkId, ChunkHolder> CHUNK_MAP = new HashMap<>();
 
         static {
-            Reflections reflections = new Reflections(ChunkResolver.class.getPackage().getName(), new MethodAnnotationsScanner());
+            final ClassLoader classLoader = SingletoneHolder.class.getClassLoader();
+            final String packageName = ChunkResolver.class.getPackage().getName();
+            Reflections reflections = new Reflections(new ConfigurationBuilder()
+                    .setUrls(ClasspathHelper.forPackage(packageName, classLoader))
+                    .addClassLoader(classLoader)
+                    .filterInputsBy(new FilterBuilder().includePackage(packageName))
+                    .setScanners(new MethodAnnotationsScanner(), new TypeAnnotationsScanner())
+            );
             Set<Method> methods = reflections.getMethodsAnnotatedWith(ChunkInitializer.class);
             for(Method method : methods) {
                 try {
