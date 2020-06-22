@@ -11,6 +11,7 @@ package kr.jclab.javautils.asymsecurefile.internal.signedsecurefile;
 import kr.jclab.javautils.asymsecurefile.UserChunk;
 import kr.jclab.javautils.asymsecurefile.ValidateFailedException;
 import kr.jclab.javautils.asymsecurefile.internal.InputStreamDelegate;
+import kr.jclab.javautils.asymsecurefile.internal.InputStreamOptions;
 import kr.jclab.javautils.asymsecurefile.internal.SignatureHeader;
 import org.bouncycastle.tsp.TSPException;
 import org.bouncycastle.tsp.TimeStampToken;
@@ -27,8 +28,8 @@ public class SignedSecureFileInputStreamDelegate extends InputStreamDelegate {
 
     private SignedSecureFileInputStream realInputStream = null;
 
-    public SignedSecureFileInputStreamDelegate(InputStream inputStream, Provider securityProvider, SignatureHeader signatureHeader) {
-        super(inputStream, securityProvider, signatureHeader);
+    public SignedSecureFileInputStreamDelegate(InputStreamOptions options) {
+        super(options);
     }
 
     @Override
@@ -61,7 +62,7 @@ public class SignedSecureFileInputStreamDelegate extends InputStreamDelegate {
             this.secretKey = "";
         }
         try {
-            this.realInputStream = new SignedSecureFileInputStream(this.inputStream, this.asymmetricKey, this.secretKey, this.signatureHeader);
+            this.realInputStream = new SignedSecureFileInputStream(this.options.getInputStream(), this.asymmetricKey, this.secretKey, this.options.getSignatureHeader());
         } catch (NoSuchAlgorithmException | InvalidKeyException e) {
             throw new IOException(e);
         } catch (IntegrityException e) {

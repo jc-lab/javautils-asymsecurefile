@@ -8,10 +8,7 @@
 
 package kr.jclab.javautils.asymsecurefile;
 
-import kr.jclab.javautils.asymsecurefile.internal.BCProviderSingletone;
-import kr.jclab.javautils.asymsecurefile.internal.InputStreamDelegate;
-import kr.jclab.javautils.asymsecurefile.internal.SignatureHeader;
-import kr.jclab.javautils.asymsecurefile.internal.VersionRouter;
+import kr.jclab.javautils.asymsecurefile.internal.*;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 
 import javax.validation.constraints.NotNull;
@@ -25,18 +22,21 @@ import java.security.Provider;
 import java.util.Enumeration;
 
 public class AsymSecureFileInputStream extends InputStream {
-    private final InputStream inputStream;
-    private final Provider securityProvider;
+    private final InputStreamOptions options;
+
     private InputStreamDelegate delegate = null;
 
     private final SignatureHeader signatureHeader = new SignatureHeader();
     private boolean signatureHeaderReady = false;
 
+    public AsymSecureFileInputStream(InputStreamOptions options) {
+        this.options = options;
+    }
+
     public AsymSecureFileInputStream(InputStream inputStream, Provider securityProvider) {
-        this.inputStream = inputStream;
-        if(securityProvider == null)
-            securityProvider = BCProviderSingletone.getProvider();
-        this.securityProvider = securityProvider;
+        this.options = new InputStreamOptions(
+                inputStream, securityProvider
+        );
     }
 
     @SuppressWarnings("unused")
@@ -55,10 +55,11 @@ public class AsymSecureFileInputStream extends InputStream {
      */
     public int headerRead() throws IOException {
         if(!this.signatureHeaderReady) {
-            if (this.inputStream.available() >= SignatureHeader.SIGNATURE_SIZE) {
-                this.signatureHeader.read(this.inputStream);
+            if (this.options.getInputStream().available() >= SignatureHeader.SIGNATURE_SIZE) {
+                this.signatureHeader.read(this.options.getInputStream());
+                this.options.setSignatureHeader(this.signatureHeader);
                 try {
-                    this.delegate = VersionRouter.findReaderDelegate(this.signatureHeader.getVersion()).getDeclaredConstructor(new Class[] {InputStream.class, Provider.class, SignatureHeader.class}).newInstance(this.inputStream, this.securityProvider, this.signatureHeader);
+                    this.delegate = VersionRouter.findReaderDelegate(this.signatureHeader.getVersion()).getDeclaredConstructor(new Class[] {InputStreamOptions.class}).newInstance(this.options);
                 } catch (InstantiationException | IllegalAccessException | NoSuchMethodException | InvocationTargetException e) {
                     // Never occur
                     throw new RuntimeException(e);
@@ -79,7 +80,11 @@ public class AsymSecureFileInputStream extends InputStream {
      */
     @SuppressWarnings("unused")
     public void setAuthKey(@NotNull byte[] authKey) throws IOException {
-        this.delegate.setAuthKey(authKey);
+        if (this.delegate != null) {
+            this.delegate.setAuthKey(authKey);
+        }else{
+            this.options.setAuthKey(authKey);
+        }
     }
 
     /**
@@ -89,7 +94,7 @@ public class AsymSecureFileInputStream extends InputStream {
      */
     @SuppressWarnings("unused")
     public void setAuthKey(@NotNull String authKey) throws IOException {
-        this.delegate.setAuthKey(authKey.getBytes(StandardCharsets.UTF_8));
+        this.setAuthKey(authKey.getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -154,7 +159,7 @@ public class AsymSecureFileInputStream extends InputStream {
 
     @Override
     public void close() throws IOException {
-        this.inputStream.close();
+        this.options.getInputStream().close();
     }
 
     public UserChunk getUserChunk(short code) throws IOException {

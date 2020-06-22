@@ -65,7 +65,6 @@ public class Jasf4InputStreamDelegate extends InputStreamDelegate {
     private Digest fingerprintDigest = null;
     private byte[] computedFingerprint = null;
 
-    private transient byte[] authKey = null;
     private transient KeyPair keyPair = null;
     private transient AsymmetricKeyObject asymKey = null;
 
@@ -87,10 +86,10 @@ public class Jasf4InputStreamDelegate extends InputStreamDelegate {
 
     private Map<Integer, UserChunk> cachedUserChunks = null;
 
-    public Jasf4InputStreamDelegate(InputStream inputStream, Provider securityProvider, SignatureHeader signatureHeader) throws IOException {
-        super(inputStream, securityProvider, signatureHeader);
+    public Jasf4InputStreamDelegate(InputStreamOptions options) throws IOException {
+        super(options);
         this.asn1StreamReader = new Asn1StreamReader(
-                inputStream,
+                options.getInputStream(),
                 Asn1ReaderOptions.builder()
                         .stripSequence(true)
                         .build()
@@ -108,19 +107,19 @@ public class Jasf4InputStreamDelegate extends InputStreamDelegate {
     }
 
     private boolean isKeysPresent() {
-        return (this.authKey != null) && ((this.asymKey != null) || (this.keyPair != null));
+        return (this.options.getAuthKey() != null) && ((this.asymKey != null) || (this.keyPair != null));
     }
 
     @Override
     public void setAuthKey(byte[] authKey) throws IOException {
-        this.authKey = authKey;
+        this.options.setAuthKey(authKey);
         initBasic();
     }
 
     @Override
     public void setAsymKey(Key key) {
         try {
-            this.asymKey = AsymmetricKeyObject.fromKey(key, this.securityProvider);
+            this.asymKey = AsymmetricKeyObject.fromKey(key, this.options.getSecurityProvider());
         } catch (NotSupportAlgorithmException e) {
             throw new RuntimeException(e);
         }
@@ -214,18 +213,18 @@ public class Jasf4InputStreamDelegate extends InputStreamDelegate {
         if(this.authKeyValidated) {
             return true;
         }
-        if(this.authKey == null || !ReadState.DATA_PENDING.equals(this.readState)) {
+        if(this.options.getAuthKey() == null || !ReadState.DATA_PENDING.equals(this.readState)) {
             return false;
         }
 
         Asn1AuthKeyCheckChunk authKeyCheckChunk = this.getChunk(Asn1AuthKeyCheckChunk.class, Asn1AuthKeyCheckChunk.CHUNK_ID);
         Asn1DefaultHeaderChunk defaultHeaderChunk = this.getChunk(Asn1DefaultHeaderChunk.class, Asn1DefaultHeaderChunk.CHUNK_ID);
 
-        if (!Jasf4AuthKeyUtils.checkAuthKeyChunk(authKeyCheckChunk, this.authKey)) {
+        if (!Jasf4AuthKeyUtils.checkAuthKeyChunk(authKeyCheckChunk, this.options.getAuthKey())) {
             throw new ValidateFailedException("wrong authKey");
         }
 
-        this.authKeyDerivedKeys = Jasf4AuthKeyUtils.deriveKeys(this.authKey);
+        this.authKeyDerivedKeys = Jasf4AuthKeyUtils.deriveKeys(options.getAuthKey());
         this.authKeyCryptoIv = defaultHeaderChunk.getAuthKeyCryptionIv().getOctets();
 
         try {
@@ -271,7 +270,7 @@ public class Jasf4InputStreamDelegate extends InputStreamDelegate {
             byte[] dataMacKey = null;
             if (OperationType.SIGN.equals(this.operationType)) {
                 if (this.asymKey == null && this.keyPair != null) {
-                    this.asymKey = AsymmetricKeyObject.fromKey(this.keyPair.getPublic(), this.securityProvider);
+                    this.asymKey = AsymmetricKeyObject.fromKey(this.keyPair.getPublic(), this.options.getSecurityProvider());
                 }
                 assert this.asymKey != null;
                 if (!defaultHeaderChunk.getAsymmetricAlgorithmType().equals(this.asymKey.getAlgorithmType())) {
@@ -281,7 +280,7 @@ public class Jasf4InputStreamDelegate extends InputStreamDelegate {
             }
             if (OperationType.PUBLIC_ENCRYPT.equals(this.operationType)) {
                 if(this.asymKey == null && this.keyPair != null) {
-                    this.asymKey = AsymmetricKeyObject.fromKey(this.keyPair, this.securityProvider);
+                    this.asymKey = AsymmetricKeyObject.fromKey(this.keyPair, this.options.getSecurityProvider());
                 }
                 assert this.asymKey != null;
                 if (!defaultHeaderChunk.getAsymmetricAlgorithmType().equals(this.asymKey.getAlgorithmType())) {
@@ -301,7 +300,7 @@ public class Jasf4InputStreamDelegate extends InputStreamDelegate {
                 }else{
                     Asn1EphemeralECPublicKeyChunk ecPublicKeyChunk = this.getChunk(Asn1EphemeralECPublicKeyChunk.class, Asn1EphemeralECPublicKeyChunk.CHUNK_ID);
                     Asn1DHCheckDataChunk dhCheckDataChunk = this.getChunk(Asn1DHCheckDataChunk.class, Asn1DHCheckDataChunk.CHUNK_ID);
-                    AsymmetricKeyObject publicKey = AsymmetricKeyObject.fromPublicKey(ecPublicKeyChunk.getData(), this.securityProvider);
+                    AsymmetricKeyObject publicKey = AsymmetricKeyObject.fromPublicKey(ecPublicKeyChunk.getData(), this.options.getSecurityProvider());
                     KeyAgreement keyAgreement = this.asymKey.createKeyAgreement();
                     keyAgreement.doPhase(publicKey.getPublicKey(), true);
                     byte[] hkdfResult = HkdfUtils.generateKey(

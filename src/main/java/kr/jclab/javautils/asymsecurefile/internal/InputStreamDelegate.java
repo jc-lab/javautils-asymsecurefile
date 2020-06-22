@@ -20,14 +20,10 @@ import java.security.Provider;
 import java.util.Enumeration;
 
 public abstract class InputStreamDelegate {
-    protected final InputStream inputStream;
-    protected final Provider securityProvider;
-    protected final SignatureHeader signatureHeader;
+    protected final InputStreamOptions options;
 
-    public InputStreamDelegate(InputStream inputStream, Provider securityProvider, SignatureHeader signatureHeader) {
-        this.inputStream = inputStream;
-        this.securityProvider = securityProvider;
-        this.signatureHeader = signatureHeader;
+    public InputStreamDelegate(InputStreamOptions options) {
+        this.options = options;
     }
 
     public abstract void setAsymKey(Key key);
